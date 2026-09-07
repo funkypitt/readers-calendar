@@ -68,8 +68,8 @@ sealed class Screen {
     data class Week(val start: LocalDate) : Screen()
     data class Day(val date: LocalDate) : Screen()
     data class Event(val id: Long) : Screen()
-    /** id 0 = new event on [date]. */
-    data class Edit(val id: Long, val date: LocalDate = LocalDate.now()) : Screen()
+    /** id 0 = new event on [date], at [time] when it comes from a tap on the time grid. */
+    data class Edit(val id: Long, val date: LocalDate = LocalDate.now(), val time: LocalTime? = null) : Screen()
     data object Calendars : Screen()
     data object Settings : Screen()
 }
@@ -274,14 +274,21 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
                 .filter { it.date == date || it.allDay }
         }
     }
-    val allDayText = stringResource(R.string.all_day)
+    fun go(d: LocalDate) { nav.stack[nav.stack.size - 1] = Screen.Day(d) }
     Page {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(dayLabel(date, LocalDate.now(), stringResource(R.string.today), stringResource(R.string.tomorrow)), onBack = { nav.pop() })
-            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)) {
-                if (list.isEmpty()) item { Small(stringResource(R.string.nothing_planned), Modifier.padding(horizontal = rowPadH, vertical = rowPadV)) }
-                items(list, key = { it.key }) { o -> OccurrenceRow(o, allDayText) { nav.push(Screen.Event(o.eventId)) } }
+            Row(Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 2.dp)) {
+                T("‹", Modifier.noRippleClickable { go(date.minusDays(1)) }, size = typo.title, align = TextAlign.Start)
+                Box(Modifier.weight(1f))
+                T("›", Modifier.noRippleClickable { go(date.plusDays(1)) }, size = typo.title, align = TextAlign.End)
             }
+            TimeGrid(
+                listOf(date), list, LocalDate.now(), Modifier.weight(1f), compact = false,
+                onEvent = { nav.push(Screen.Event(it.eventId)) },
+                onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
+                onSwipe = { go(date.plusDays(it.toLong())) }
+            )
             Rule()
             TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, date)) }
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
@@ -365,7 +372,7 @@ fun reminderLabel(m: Int?): String = when (m) {
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate) {
+fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? = null) {
     val context = LocalContext.current
     val settings by app.prefs.settings.collectAsState()
     val typo = LocalTypo.current
@@ -374,7 +381,7 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate) {
     BackHandler { nav.pop() }
     val calendars by produceState<List<CalendarInfo>>(emptyList()) { value = withContext(Dispatchers.IO) { app.calendars.calendars().filter { it.writable } } }
     var loaded by remember { mutableStateOf(id == 0L) }
-    val nextHour = LocalTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0)
+    val nextHour = time ?: LocalTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0)
     var e by remember { mutableStateOf(EventDetails(calendarId = settings.defaultCalendar, start = LocalDateTime.of(date, nextHour), end = LocalDateTime.of(date, nextHour).plusHours(1), reminderMinutes = settings.defaultReminderMinutes.takeIf { it >= 0 })) }
     LaunchedEffect(id) { if (id != 0L) { withContext(Dispatchers.IO) { app.calendars.event(id) }?.let { e = it }; loaded = true } }
     LaunchedEffect(calendars) { if (e.calendarId == 0L || calendars.none { it.id == e.calendarId }) calendars.firstOrNull()?.let { e = e.copy(calendarId = it.id) } }

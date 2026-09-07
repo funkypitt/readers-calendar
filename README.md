@@ -7,9 +7,11 @@ Nextcloud…) — so there is no server setup and nothing new to keep in sync.
 
 * **Agenda**: the coming days as a list, grouped by day. Tap the month name for the month grid.
 * **Month**: a grid of numbers; a dot marks days with events, today is inverted.
-* **Week**: in portrait, the seven days as a list; in landscape, the time grid — seven
-  columns over the hours, events as outlined boxes, all-day events in a strip above, the
-  present moment as a line.
+* **Week**: a time grid in both orientations — seven columns over the hours, events as
+  solid blocks so the gaps between them read as free time, overlapping events side by side,
+  all-day events in a strip above, the present moment as a line. Swipe sideways for the next
+  week, tap a day header for that day, tap an empty slot for a new event at that hour.
+* **Day**: the same grid, one column wide, with the place next to the time.
 * **Event**: title, when, repetition, reminder, then the calendar it belongs to as a quiet
   line of text (no colour codes), location and description.
 * **Edit / create**: title, all day, start and end (date from a month grid, time typed as

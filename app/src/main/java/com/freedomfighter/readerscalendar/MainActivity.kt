@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
                     is Screen.Week -> com.freedomfighter.readerscalendar.ui.WeekScreen(nav, app, s.start)
                     is Screen.Day -> DayScreen(nav, app, s.date)
                     is Screen.Event -> EventScreen(nav, app, s.id)
-                    is Screen.Edit -> EditScreen(nav, app, s.id, s.date)
+                    is Screen.Edit -> EditScreen(nav, app, s.id, s.date, s.time)
                     Screen.Calendars -> CalendarsScreen(nav, app)
                     Screen.Settings -> SettingsScreen(nav, app)
                 }

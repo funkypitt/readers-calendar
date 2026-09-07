@@ -61,7 +61,8 @@ fun T(
     color: Color = LocalColors.current.fg,
     align: TextAlign = LocalTypo.current.textAlign,
     maxLines: Int = Int.MAX_VALUE,
-    lineHeightMul: Float = 1.25f
+    lineHeightMul: Float = 1.25f,
+    softWrap: Boolean = true
 ) {
     BasicText(
         text = text,
@@ -75,7 +76,8 @@ fun T(
             textAlign = align
         ),
         maxLines = maxLines,
-        overflow = TextOverflow.Ellipsis
+        softWrap = softWrap,
+        overflow = if (softWrap) TextOverflow.Ellipsis else TextOverflow.Clip
     )
 }
 
