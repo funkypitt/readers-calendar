@@ -30,10 +30,22 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" android:host="com.android.calendar" android:pathPrefix="/time" />
             </intent-filter>
+            <!-- The provider types /time URIs as time/epoch and events as cursor items; a filter
+                 without a type never matches those, so both spellings are declared. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:host="com.android.calendar" android:mimeType="time/epoch" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="content" android:host="com.android.calendar" android:pathPrefix="/events" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:host="com.android.calendar" android:mimeType="vnd.android.cursor.item/event" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.INSERT" />
