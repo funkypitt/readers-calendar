@@ -382,6 +382,8 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate) {
     var datePick by remember { mutableStateOf<String?>(null) }    // "start" | "end"
     var choose by remember { mutableStateOf<String?>(null) }      // "calendar" | "reminder" | "repeat"
     var error by remember { mutableStateOf<String?>(null) }
+    // A new event starts with its title: the keyboard is up as soon as the screen opens.
+    LaunchedEffect(Unit) { if (id == 0L) prompt = "title" }
 
     fun save() {
         if (e.title.isBlank()) { prompt = "title"; return }
