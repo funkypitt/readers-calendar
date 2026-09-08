@@ -71,7 +71,7 @@ fun weekStart(date: LocalDate, monday: Boolean): LocalDate {
  * present moment is a line. Swipe sideways for the next or previous week.
  */
 @Composable
-fun WeekScreen(nav: Nav, app: App, start: LocalDate) {
+fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) {
     val settings by app.prefs.settings.collectAsState()
     val typo = LocalTypo.current
     val zone = ZoneId.systemDefault()
@@ -84,12 +84,12 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate) {
     }
     val today = LocalDate.now()
     val title = start.format(DateTimeFormatter.ofPattern("d MMM")).lowercase() + " – " + start.plusDays(6).format(DateTimeFormatter.ofPattern("d MMM yyyy")).lowercase()
-    fun go(s: LocalDate) { nav.stack[nav.stack.size - 1] = Screen.Week(s) }
+    fun go(s: LocalDate) { nav.stack[nav.stack.size - 1] = Screen.Week(s, workdays) }
     Page {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(title, onBack = { nav.pop() }, trailing = stringResource(R.string.go_today), onTrailing = { go(weekStart(today, settings.weekStartsMonday)) })
             TimeGrid(
-                days, occurrences, today, Modifier.weight(1f), compact = !isLandscape(),
+                days, occurrences, today, Modifier.weight(1f), compact = !isLandscape(), compactWeekend = workdays,
                 onEvent = { nav.push(Screen.Event(it.eventId)) },
                 onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
                 onDay = { nav.push(Screen.Day(it)) },
@@ -124,9 +124,11 @@ private fun placeLanes(events: List<Placed>): List<Placed> {
  */
 @Composable
 fun TimeGrid(
-    days: List<LocalDate>, occurrences: List<Occurrence>, today: LocalDate, modifier: Modifier, compact: Boolean,
+    days: List<LocalDate>, occurrences: List<Occurrence>, today: LocalDate, modifier: Modifier, compact: Boolean, compactWeekend: Boolean = false,
     onEvent: (Occurrence) -> Unit, onSlot: (LocalDate, LocalTime) -> Unit, onDay: ((LocalDate) -> Unit)? = null, onSwipe: ((Int) -> Unit)? = null
 ) {
+    // "Workdays": Saturday and Sunday share one column, each a half of it.
+    fun weightOf(d: LocalDate): Float = if (compactWeekend && (d.dayOfWeek == DayOfWeek.SATURDAY || d.dayOfWeek == DayOfWeek.SUNDAY)) 0.5f else 1f
     val arrowEnd = 28.dp
     val colors = LocalColors.current
     val typo = LocalTypo.current
@@ -161,20 +163,21 @@ fun TimeGrid(
             Box(Modifier.width(gutter).fillMaxHeight().then(if (onSwipe != null) Modifier.noRippleClickable { onSwipe(-1) } else Modifier), contentAlignment = Alignment.Center) { T("‹", size = typo.title, color = colors.dim, align = TextAlign.Center) }
             for (d in days) {
                 val isToday = d == today
+                val narrow = weightOf(d) < 1f
                 Column(
-                    Modifier.weight(1f).padding(horizontal = 2.dp).then(if (isToday) Modifier.background(colors.fg) else Modifier)
+                    Modifier.weight(weightOf(d)).padding(horizontal = 2.dp).then(if (isToday) Modifier.background(colors.fg) else Modifier)
                         .then(if (onDay != null) Modifier.noRippleClickable { onDay(d) } else Modifier).padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Small(d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).lowercase().trimEnd('.').take(if (compact) 1 else 3), color = if (isToday) colors.bg else colors.dim, align = TextAlign.Center, maxLines = 1)
-                    T(d.dayOfMonth.toString(), size = typo.title, color = if (isToday) colors.bg else colors.fg, align = TextAlign.Center, maxLines = 1)
+                    Small(d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).lowercase().trimEnd('.').take(if (compact || narrow) 1 else 3), color = if (isToday) colors.bg else colors.dim, align = TextAlign.Center, maxLines = 1)
+                    T(d.dayOfMonth.toString(), size = if (narrow) typo.small else typo.title, color = if (isToday) colors.bg else colors.fg, align = TextAlign.Center, maxLines = 1)
                 }
             }
             Box(Modifier.width(arrowEnd).fillMaxHeight().then(if (onSwipe != null) Modifier.noRippleClickable { onSwipe(1) } else Modifier), contentAlignment = Alignment.Center) { T("›", size = typo.title, color = colors.dim, align = TextAlign.Center) }
         }
         if (allDay.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(end = if (single) 8.dp else arrowEnd, top = 4.dp)) {
             Box(Modifier.width(gutter))
-            for (d in days) Column(Modifier.weight(1f).padding(horizontal = 2.dp)) {
+            for (d in days) Column(Modifier.weight(weightOf(d)).padding(horizontal = 2.dp)) {
                 allDay.filter { it.date <= d && Instant.ofEpochMilli(it.end).atZone(zone).toLocalDate() > d }.forEach { o ->
                     Box(Modifier.fillMaxWidth().padding(bottom = 2.dp).background(colors.fg).noRippleClickable { onEvent(o) }.padding(horizontal = 4.dp, vertical = 2.dp)) {
                         T(o.title, size = blockSize, color = colors.bg, maxLines = 1, align = TextAlign.Start, lineHeightMul = 1.2f)
@@ -199,7 +202,7 @@ fun TimeGrid(
                     })
                 }
                 BoxWithConstraints(
-                    Modifier.weight(1f).height(hourHeight * 24 + 8.dp).pointerInput(d) {
+                    Modifier.weight(weightOf(d)).height(hourHeight * 24 + 8.dp).pointerInput(d) {
                         detectTapGestures { pos -> onSlot(d, LocalTime.of(((pos.y / hourHeight.toPx()).toInt()).coerceIn(0, 23), 0)) }
                     }
                 ) {

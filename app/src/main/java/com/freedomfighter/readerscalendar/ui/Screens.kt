@@ -66,7 +66,7 @@ import java.util.Locale
 sealed class Screen {
     data object Agenda : Screen()
     data class Month(val month: YearMonth) : Screen()
-    data class Week(val start: LocalDate) : Screen()
+    data class Week(val start: LocalDate, val workdays: Boolean = false) : Screen()
     data class Day(val date: LocalDate) : Screen()
     data class Event(val id: Long) : Screen()
     /** id 0 = new event on [date], at [time] when it comes from a tap on the time grid. */
@@ -166,6 +166,7 @@ fun AgendaScreen(nav: Nav, app: App) {
                 MonthGrid(YearMonth.from(today), settings.weekStartsMonday, marked, null) { nav.push(Screen.Day(it)) }
                 Box(Modifier.weight(1f))
                 TextRow(stringResource(R.string.week_view), size = typo.title) { nav.push(Screen.Week(weekStart(today, settings.weekStartsMonday))) }
+                TextRow(stringResource(R.string.workdays_view), size = typo.title) { nav.push(Screen.Week(weekStart(today, true), workdays = true)) }
             }
         }, right = list) else list()
         if (menu) TextMenu(
@@ -173,6 +174,7 @@ fun AgendaScreen(nav: Nav, app: App) {
             items = buildList {
                 add(MenuItem(stringResource(R.string.go_today)) { nav.home() })
                 add(MenuItem(stringResource(R.string.week_view)) { nav.push(Screen.Week(weekStart(today, settings.weekStartsMonday))) })
+                add(MenuItem(stringResource(R.string.workdays_view)) { nav.push(Screen.Week(weekStart(today, true), workdays = true)) })
                 add(MenuItem(stringResource(R.string.month_view)) { nav.push(Screen.Month(YearMonth.from(today))) })
                 add(MenuItem(stringResource(R.string.calendars)) { nav.push(Screen.Calendars) })
                 add(MenuItem(if (colors.isDark) stringResource(R.string.theme_light) else stringResource(R.string.theme_dark)) { app.prefs.toggleTheme(systemDark) })
@@ -527,8 +529,8 @@ fun SettingsScreen(nav: Nav, app: App) {
                 TextRow(stringResource(R.string.setting_default_calendar, calendars.firstOrNull { it.id == s.defaultCalendar }?.name ?: calendars.firstOrNull()?.name ?: "…"), size = typo.title) { pick = "calendar" }
                 TextRow(stringResource(R.string.setting_default_reminder, reminderLabel(s.defaultReminderMinutes.takeIf { it >= 0 })), size = typo.title) { pick = "reminder" }
                 TextRow(stringResource(R.string.setting_week_start, if (s.weekStartsMonday) stringResource(R.string.monday) else stringResource(R.string.sunday)), size = typo.title) { app.prefs.setWeekStartsMonday(!s.weekStartsMonday) }
-                TextRow(stringResource(R.string.setting_default_view, when (s.defaultView) { DefaultView.AGENDA -> stringResource(R.string.agenda); DefaultView.WEEK -> stringResource(R.string.week_view); DefaultView.DAY -> stringResource(R.string.day_view); DefaultView.MONTH -> stringResource(R.string.month_view) }), size = typo.title) {
-                    app.prefs.setDefaultView(when (s.defaultView) { DefaultView.AGENDA -> DefaultView.WEEK; DefaultView.WEEK -> DefaultView.DAY; DefaultView.DAY -> DefaultView.MONTH; DefaultView.MONTH -> DefaultView.AGENDA })
+                TextRow(stringResource(R.string.setting_default_view, when (s.defaultView) { DefaultView.AGENDA -> stringResource(R.string.agenda); DefaultView.WEEK -> stringResource(R.string.week_view); DefaultView.WORKDAYS -> stringResource(R.string.workdays_view); DefaultView.DAY -> stringResource(R.string.day_view); DefaultView.MONTH -> stringResource(R.string.month_view) }), size = typo.title) {
+                    app.prefs.setDefaultView(when (s.defaultView) { DefaultView.AGENDA -> DefaultView.WEEK; DefaultView.WEEK -> DefaultView.WORKDAYS; DefaultView.WORKDAYS -> DefaultView.DAY; DefaultView.DAY -> DefaultView.MONTH; DefaultView.MONTH -> DefaultView.AGENDA })
                 }
                 Rule(Modifier.padding(vertical = 8.dp))
                 val themeName = when (s.theme) { ThemeMode.DARK -> stringResource(R.string.theme_dark); ThemeMode.LIGHT -> stringResource(R.string.theme_light); ThemeMode.SYSTEM -> stringResource(R.string.theme_system) }

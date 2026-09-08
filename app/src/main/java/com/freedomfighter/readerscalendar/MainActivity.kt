@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
             val today = LocalDate.now()
             when (app.prefs.settings.value.defaultView) {
                 com.freedomfighter.readerscalendar.data.DefaultView.WEEK -> nav.push(Screen.Week(com.freedomfighter.readerscalendar.ui.weekStart(today, app.prefs.settings.value.weekStartsMonday)))
+                com.freedomfighter.readerscalendar.data.DefaultView.WORKDAYS -> nav.push(Screen.Week(com.freedomfighter.readerscalendar.ui.weekStart(today, true), workdays = true))
                 com.freedomfighter.readerscalendar.data.DefaultView.DAY -> nav.push(Screen.Day(today))
                 com.freedomfighter.readerscalendar.data.DefaultView.MONTH -> nav.push(Screen.Month(java.time.YearMonth.now()))
                 com.freedomfighter.readerscalendar.data.DefaultView.AGENDA -> {}
@@ -61,7 +62,7 @@ class MainActivity : ComponentActivity() {
                 when (val s = nav.current) {
                     Screen.Agenda -> AgendaScreen(nav, app)
                     is Screen.Month -> MonthScreen(nav, app, s.month)
-                    is Screen.Week -> com.freedomfighter.readerscalendar.ui.WeekScreen(nav, app, s.start)
+                    is Screen.Week -> com.freedomfighter.readerscalendar.ui.WeekScreen(nav, app, s.start, s.workdays)
                     is Screen.Day -> DayScreen(nav, app, s.date)
                     is Screen.Event -> EventScreen(nav, app, s.id)
                     is Screen.Edit -> EditScreen(nav, app, s.id, s.date, s.time)

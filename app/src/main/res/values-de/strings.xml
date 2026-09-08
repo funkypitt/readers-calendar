@@ -73,4 +73,5 @@
     <string name="agenda">Agenda</string>
     <string name="setting_default_view">öffnet mit: %1$s</string>
     <string name="day_view">Tag</string>
+    <string name="workdays_view">Werktage</string>
 </resources>

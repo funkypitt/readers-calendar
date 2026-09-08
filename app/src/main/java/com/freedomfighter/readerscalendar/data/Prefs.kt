@@ -10,7 +10,7 @@ enum class FontChoice { SERIF, SANS, MONO }
 enum class TextSize { SMALL, MEDIUM, LARGE }
 enum class Align { LEFT, CENTER }
 /** The view the app opens on. */
-enum class DefaultView { AGENDA, WEEK, DAY, MONTH }
+enum class DefaultView { AGENDA, WEEK, WORKDAYS, DAY, MONTH }
 
 data class Settings(
     val theme: ThemeMode = ThemeMode.DARK,
