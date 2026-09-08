@@ -72,4 +72,6 @@
     <string name="search">search</string>
     <string name="week_view">week</string>
     <string name="agenda">agenda</string>
+    <string name="setting_default_view">opens on: %1$s</string>
+    <string name="day_view">day</string>
 </resources>

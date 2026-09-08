@@ -12,6 +12,8 @@ Nextcloud…) — so there is no server setup and nothing new to keep in sync.
   all-day events in a strip above, the present moment as a line. Swipe sideways for the next
   week, tap a day header for that day, tap an empty slot for a new event at that hour.
 * **Day**: the same grid, one column wide, with the place next to the time.
+* The app opens on the week; settings › "opens on" switches that to the agenda, the day or the
+  month. The agenda stays one back away.
 * **Event**: title, when, repetition, reminder, then the calendar it belongs to as a quiet
   line of text (no colour codes), location and description.
 * **Edit / create**: title, all day, start and end (date from a month grid, time typed as

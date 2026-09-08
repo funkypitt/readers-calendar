@@ -43,6 +43,17 @@ class MainActivity : ComponentActivity() {
         val app = application as App
         if (!app.calendars.hasPermission()) askPermission()
         handle(intent)
+        // A cold start lands on the chosen view (the week unless set otherwise); the agenda
+        // stays underneath as the root, one back away.
+        if (savedInstanceState == null && nav.stack.size == 1) {
+            val today = LocalDate.now()
+            when (app.prefs.settings.value.defaultView) {
+                com.freedomfighter.readerscalendar.data.DefaultView.WEEK -> nav.push(Screen.Week(com.freedomfighter.readerscalendar.ui.weekStart(today, app.prefs.settings.value.weekStartsMonday)))
+                com.freedomfighter.readerscalendar.data.DefaultView.DAY -> nav.push(Screen.Day(today))
+                com.freedomfighter.readerscalendar.data.DefaultView.MONTH -> nav.push(Screen.Month(java.time.YearMonth.now()))
+                com.freedomfighter.readerscalendar.data.DefaultView.AGENDA -> {}
+            }
+        }
         setContent {
             val settings by app.prefs.settings.collectAsState()
             ReaderTheme(settings) {

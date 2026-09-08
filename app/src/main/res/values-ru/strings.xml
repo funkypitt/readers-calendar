@@ -71,4 +71,6 @@
     <string name="search">поиск</string>
     <string name="week_view">неделя</string>
     <string name="agenda">повестка</string>
+    <string name="setting_default_view">открывается на: %1$s</string>
+    <string name="day_view">день</string>
 </resources>

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.freedomfighter.readerscalendar.App
 import com.freedomfighter.readerscalendar.R
 import com.freedomfighter.readerscalendar.data.Align
+import com.freedomfighter.readerscalendar.data.DefaultView
 import com.freedomfighter.readerscalendar.data.CalendarInfo
 import com.freedomfighter.readerscalendar.data.EventDetails
 import com.freedomfighter.readerscalendar.data.FontChoice
@@ -526,6 +527,9 @@ fun SettingsScreen(nav: Nav, app: App) {
                 TextRow(stringResource(R.string.setting_default_calendar, calendars.firstOrNull { it.id == s.defaultCalendar }?.name ?: calendars.firstOrNull()?.name ?: "…"), size = typo.title) { pick = "calendar" }
                 TextRow(stringResource(R.string.setting_default_reminder, reminderLabel(s.defaultReminderMinutes.takeIf { it >= 0 })), size = typo.title) { pick = "reminder" }
                 TextRow(stringResource(R.string.setting_week_start, if (s.weekStartsMonday) stringResource(R.string.monday) else stringResource(R.string.sunday)), size = typo.title) { app.prefs.setWeekStartsMonday(!s.weekStartsMonday) }
+                TextRow(stringResource(R.string.setting_default_view, when (s.defaultView) { DefaultView.AGENDA -> stringResource(R.string.agenda); DefaultView.WEEK -> stringResource(R.string.week_view); DefaultView.DAY -> stringResource(R.string.day_view); DefaultView.MONTH -> stringResource(R.string.month_view) }), size = typo.title) {
+                    app.prefs.setDefaultView(when (s.defaultView) { DefaultView.AGENDA -> DefaultView.WEEK; DefaultView.WEEK -> DefaultView.DAY; DefaultView.DAY -> DefaultView.MONTH; DefaultView.MONTH -> DefaultView.AGENDA })
+                }
                 Rule(Modifier.padding(vertical = 8.dp))
                 val themeName = when (s.theme) { ThemeMode.DARK -> stringResource(R.string.theme_dark); ThemeMode.LIGHT -> stringResource(R.string.theme_light); ThemeMode.SYSTEM -> stringResource(R.string.theme_system) }
                 TextRow(stringResource(R.string.setting_theme, themeName), size = typo.title) { app.prefs.setTheme(next(s.theme)) }

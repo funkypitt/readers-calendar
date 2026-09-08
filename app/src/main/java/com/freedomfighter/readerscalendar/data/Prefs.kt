@@ -9,6 +9,8 @@ enum class ThemeMode { DARK, LIGHT, SYSTEM }
 enum class FontChoice { SERIF, SANS, MONO }
 enum class TextSize { SMALL, MEDIUM, LARGE }
 enum class Align { LEFT, CENTER }
+/** The view the app opens on. */
+enum class DefaultView { AGENDA, WEEK, DAY, MONTH }
 
 data class Settings(
     val theme: ThemeMode = ThemeMode.DARK,
@@ -21,7 +23,8 @@ data class Settings(
     val hiddenCalendars: Set<Long> = emptySet(),
     /** Calendar used for new events (0 = first writable). */
     val defaultCalendar: Long = 0L,
-    val defaultReminderMinutes: Int = 10
+    val defaultReminderMinutes: Int = 10,
+    val defaultView: DefaultView = DefaultView.WEEK
 )
 
 class Prefs(context: Context) {
@@ -40,7 +43,8 @@ class Prefs(context: Context) {
         weekStartsMonday = sp.getBoolean("week_monday", true),
         hiddenCalendars = (sp.getStringSet("hidden_calendars", emptySet()) ?: emptySet()).mapNotNull { it.toLongOrNull() }.toSet(),
         defaultCalendar = sp.getLong("default_calendar", 0L),
-        defaultReminderMinutes = sp.getInt("default_reminder", 10)
+        defaultReminderMinutes = sp.getInt("default_reminder", 10),
+        defaultView = enumOr(sp.getString("default_view", null), DefaultView.WEEK)
     )
     private inline fun <reified E : Enum<E>> enumOr(name: String?, default: E): E =
         name?.let { runCatching { enumValueOf<E>(it) }.getOrNull() } ?: default
@@ -54,6 +58,7 @@ class Prefs(context: Context) {
     fun setHiddenCalendars(ids: Set<Long>) = sp.edit().putStringSet("hidden_calendars", ids.map { it.toString() }.toSet()).apply()
     fun setDefaultCalendar(id: Long) = sp.edit().putLong("default_calendar", id).apply()
     fun setDefaultReminder(m: Int) = sp.edit().putInt("default_reminder", m).apply()
+    fun setDefaultView(v: DefaultView) = sp.edit().putString("default_view", v.name).apply()
     fun toggleTheme(systemIsDark: Boolean) {
         val dark = when (_settings.value.theme) { ThemeMode.DARK -> true; ThemeMode.LIGHT -> false; ThemeMode.SYSTEM -> systemIsDark }
         setTheme(if (dark) ThemeMode.LIGHT else ThemeMode.DARK)
