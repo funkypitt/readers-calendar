@@ -280,6 +280,10 @@ fun MonthScreen(nav: Nav, app: App, month: YearMonth) {
                 T("›", Modifier.noRippleClickable { nav.stack[nav.stack.size - 1] = Screen.Month(month.plusMonths(1)) }, size = typo.title, align = TextAlign.End)
             }
             MonthGrid(month, settings.weekStartsMonday, marked, null) { nav.push(Screen.Day(it)) }
+            Box(Modifier.weight(1f))
+            Rule()
+            TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))) }
+            Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
         if (menu) ViewsMenu(nav, app, onDismiss = { menu = false }, first = listOf(MenuItem(stringResource(R.string.go_today)) { nav.stack[nav.stack.size - 1] = Screen.Month(YearMonth.from(LocalDate.now())) }), newEventDate = if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))
     }

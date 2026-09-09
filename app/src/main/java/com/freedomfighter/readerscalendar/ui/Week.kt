@@ -4,6 +4,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -96,6 +99,9 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) 
                 onDay = { nav.push(Screen.Day(it)) },
                 onSwipe = { go(start.plusWeeks(it.toLong())) }
             )
+            Rule()
+            TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, if (today in days) today else start)) }
+            Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
         if (menu) ViewsMenu(
             nav, app, onDismiss = { menu = false },
