@@ -74,4 +74,6 @@
     <string name="setting_default_view">s\'ouvre sur : %1$s</string>
     <string name="day_view">jour</string>
     <string name="workdays_view">jours ouvrés</string>
+    <string name="today_list">aujourd\'hui (liste)</string>
+    <string name="today_day">aujourd\'hui (vue jour)</string>
 </resources>

@@ -74,4 +74,6 @@
     <string name="setting_default_view">se abre en: %1$s</string>
     <string name="day_view">día</string>
     <string name="workdays_view">días laborables</string>
+    <string name="today_list">hoy (lista)</string>
+    <string name="today_day">hoy (vista de día)</string>
 </resources>

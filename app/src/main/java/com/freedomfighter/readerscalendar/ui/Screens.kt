@@ -86,6 +86,36 @@ class Nav {
 }
 
 // ---------------------------------------------------------------------------------------------
+// The views menu, the same from every screen: new event first, then the views, then the look.
+// ---------------------------------------------------------------------------------------------
+
+@Composable
+fun ViewsMenu(nav: Nav, app: App, onDismiss: () -> Unit, first: List<MenuItem> = emptyList(), newEventDate: LocalDate = LocalDate.now()) {
+    val settings by app.prefs.settings.collectAsState()
+    val colors = LocalColors.current
+    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val today = LocalDate.now()
+    TextMenu(
+        title = null,
+        items = buildList {
+            addAll(first)
+            add(MenuItem(stringResource(R.string.new_event)) { nav.push(Screen.Edit(0L, newEventDate)) })
+            add(MenuItem(stringResource(R.string.today_list)) { nav.home() })
+            add(MenuItem(stringResource(R.string.today_day)) { nav.push(Screen.Day(today)) })
+            add(MenuItem(stringResource(R.string.week_view)) { nav.push(Screen.Week(weekStart(today, settings.weekStartsMonday))) })
+            add(MenuItem(stringResource(R.string.workdays_view)) { nav.push(Screen.Week(weekStart(today, true), workdays = true)) })
+            add(MenuItem(stringResource(R.string.month_view)) { nav.push(Screen.Month(YearMonth.from(today))) })
+            add(MenuItem(stringResource(R.string.calendars)) { nav.push(Screen.Calendars) })
+        },
+        footer = listOf(
+            MenuItem(if (colors.isDark) stringResource(R.string.theme_light) else stringResource(R.string.theme_dark)) { app.prefs.toggleTheme(systemDark) },
+            MenuItem(stringResource(R.string.settings)) { nav.push(Screen.Settings) }
+        ),
+        onDismiss = onDismiss
+    )
+}
+
+// ---------------------------------------------------------------------------------------------
 // Formatting
 // ---------------------------------------------------------------------------------------------
 
@@ -169,19 +199,7 @@ fun AgendaScreen(nav: Nav, app: App) {
                 TextRow(stringResource(R.string.workdays_view), size = typo.title) { nav.push(Screen.Week(weekStart(today, true), workdays = true)) }
             }
         }, right = list) else list()
-        if (menu) TextMenu(
-            title = null,
-            items = buildList {
-                add(MenuItem(stringResource(R.string.go_today)) { nav.home() })
-                add(MenuItem(stringResource(R.string.week_view)) { nav.push(Screen.Week(weekStart(today, settings.weekStartsMonday))) })
-                add(MenuItem(stringResource(R.string.workdays_view)) { nav.push(Screen.Week(weekStart(today, true), workdays = true)) })
-                add(MenuItem(stringResource(R.string.month_view)) { nav.push(Screen.Month(YearMonth.from(today))) })
-                add(MenuItem(stringResource(R.string.calendars)) { nav.push(Screen.Calendars) })
-                add(MenuItem(if (colors.isDark) stringResource(R.string.theme_light) else stringResource(R.string.theme_dark)) { app.prefs.toggleTheme(systemDark) })
-                add(MenuItem(stringResource(R.string.settings)) { nav.push(Screen.Settings) })
-            },
-            onDismiss = { menu = false }
-        )
+        if (menu) ViewsMenu(nav, app, onDismiss = { menu = false })
     }
 }
 
@@ -252,9 +270,10 @@ fun MonthScreen(nav: Nav, app: App, month: YearMonth) {
             app.calendars.occurrences(from, to, settings.hiddenCalendars).map { it.date }.toSet()
         }
     }
+    var menu by remember { mutableStateOf(false) }
     Page {
         Column(Modifier.fillMaxSize()) {
-            ScreenTitle(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase(), onBack = { nav.pop() })
+            ScreenTitle(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase(), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             Row(Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 10.dp)) {
                 T("‹", Modifier.noRippleClickable { nav.stack[nav.stack.size - 1] = Screen.Month(month.minusMonths(1)) }, size = typo.title, align = TextAlign.Start)
                 Box(Modifier.weight(1f))
@@ -262,6 +281,7 @@ fun MonthScreen(nav: Nav, app: App, month: YearMonth) {
             }
             MonthGrid(month, settings.weekStartsMonday, marked, null) { nav.push(Screen.Day(it)) }
         }
+        if (menu) ViewsMenu(nav, app, onDismiss = { menu = false }, first = listOf(MenuItem(stringResource(R.string.go_today)) { nav.stack[nav.stack.size - 1] = Screen.Month(YearMonth.from(LocalDate.now())) }), newEventDate = if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))
     }
 }
 
@@ -278,9 +298,10 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
         }
     }
     fun go(d: LocalDate) { nav.stack[nav.stack.size - 1] = Screen.Day(d) }
+    var menu by remember { mutableStateOf(false) }
     Page {
         Column(Modifier.fillMaxSize()) {
-            ScreenTitle(dayLabel(date, LocalDate.now(), stringResource(R.string.today), stringResource(R.string.tomorrow)), onBack = { nav.pop() })
+            ScreenTitle(dayLabel(date, LocalDate.now(), stringResource(R.string.today), stringResource(R.string.tomorrow)), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             Row(Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 2.dp)) {
                 T("‹", Modifier.noRippleClickable { go(date.minusDays(1)) }, size = typo.title, align = TextAlign.Start)
                 Box(Modifier.weight(1f))
@@ -296,6 +317,7 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
             TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, date)) }
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
+        if (menu) ViewsMenu(nav, app, onDismiss = { menu = false }, first = if (date != LocalDate.now()) listOf(MenuItem(stringResource(R.string.go_today)) { go(LocalDate.now()) }) else emptyList(), newEventDate = date)
     }
 }
 
@@ -529,7 +551,7 @@ fun SettingsScreen(nav: Nav, app: App) {
                 TextRow(stringResource(R.string.setting_default_calendar, calendars.firstOrNull { it.id == s.defaultCalendar }?.name ?: calendars.firstOrNull()?.name ?: "…"), size = typo.title) { pick = "calendar" }
                 TextRow(stringResource(R.string.setting_default_reminder, reminderLabel(s.defaultReminderMinutes.takeIf { it >= 0 })), size = typo.title) { pick = "reminder" }
                 TextRow(stringResource(R.string.setting_week_start, if (s.weekStartsMonday) stringResource(R.string.monday) else stringResource(R.string.sunday)), size = typo.title) { app.prefs.setWeekStartsMonday(!s.weekStartsMonday) }
-                TextRow(stringResource(R.string.setting_default_view, when (s.defaultView) { DefaultView.AGENDA -> stringResource(R.string.agenda); DefaultView.WEEK -> stringResource(R.string.week_view); DefaultView.WORKDAYS -> stringResource(R.string.workdays_view); DefaultView.DAY -> stringResource(R.string.day_view); DefaultView.MONTH -> stringResource(R.string.month_view) }), size = typo.title) {
+                TextRow(stringResource(R.string.setting_default_view, when (s.defaultView) { DefaultView.AGENDA -> stringResource(R.string.today_list); DefaultView.WEEK -> stringResource(R.string.week_view); DefaultView.WORKDAYS -> stringResource(R.string.workdays_view); DefaultView.DAY -> stringResource(R.string.day_view); DefaultView.MONTH -> stringResource(R.string.month_view) }), size = typo.title) {
                     app.prefs.setDefaultView(when (s.defaultView) { DefaultView.AGENDA -> DefaultView.WEEK; DefaultView.WEEK -> DefaultView.WORKDAYS; DefaultView.WORKDAYS -> DefaultView.DAY; DefaultView.DAY -> DefaultView.MONTH; DefaultView.MONTH -> DefaultView.AGENDA })
                 }
                 Rule(Modifier.padding(vertical = 8.dp))

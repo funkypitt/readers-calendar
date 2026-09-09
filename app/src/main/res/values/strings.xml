@@ -75,4 +75,6 @@
     <string name="setting_default_view">opens on: %1$s</string>
     <string name="day_view">day</string>
     <string name="workdays_view">workdays</string>
+    <string name="today_list">today (list)</string>
+    <string name="today_day">today (day view)</string>
 </resources>

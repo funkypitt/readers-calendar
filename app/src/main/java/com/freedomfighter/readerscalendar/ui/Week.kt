@@ -85,9 +85,10 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) 
     val today = LocalDate.now()
     val title = start.format(DateTimeFormatter.ofPattern("d MMM")).lowercase() + " – " + start.plusDays(6).format(DateTimeFormatter.ofPattern("d MMM yyyy")).lowercase()
     fun go(s: LocalDate) { nav.stack[nav.stack.size - 1] = Screen.Week(s, workdays) }
+    var menu by remember { mutableStateOf(false) }
     Page {
         Column(Modifier.fillMaxSize()) {
-            ScreenTitle(title, onBack = { nav.pop() }, trailing = stringResource(R.string.go_today), onTrailing = { go(weekStart(today, settings.weekStartsMonday)) })
+            ScreenTitle(title, onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             TimeGrid(
                 days, occurrences, today, Modifier.weight(1f), compact = !isLandscape(), compactWeekend = workdays,
                 onEvent = { nav.push(Screen.Event(it.eventId)) },
@@ -96,6 +97,11 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) 
                 onSwipe = { go(start.plusWeeks(it.toLong())) }
             )
         }
+        if (menu) ViewsMenu(
+            nav, app, onDismiss = { menu = false },
+            first = listOf(MenuItem(stringResource(R.string.go_today)) { go(weekStart(today, if (workdays) true else settings.weekStartsMonday)) }),
+            newEventDate = if (today in days) today else start
+        )
     }
 }
 

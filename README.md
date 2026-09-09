@@ -13,7 +13,10 @@ Nextcloud…) — so there is no server setup and nothing new to keep in sync.
   week, tap a day header for that day, tap an empty slot for a new event at that hour.
 * **Workdays**: the same week with Monday to Friday full width, Saturday and Sunday sharing one
   column, each a half of it.
-* **Day**: the same grid, one column wide, with the place next to the time.
+* **Day**: the same grid, one column wide, with the place next to the time. In the menu it is
+  "today (day view)", next to "today (list)" for the agenda.
+* The ⋯ menu is the same on every view: new event first, then the views, the calendars, the
+  colours and the settings.
 * The app opens on the week; settings › "opens on" switches that to the agenda, the workdays, the day or
   the month. The agenda stays one back away.
 * **Event**: title, when, repetition, reminder, then the calendar it belongs to as a quiet

@@ -74,4 +74,6 @@
     <string name="setting_default_view">открывается на: %1$s</string>
     <string name="day_view">день</string>
     <string name="workdays_view">будни</string>
+    <string name="today_list">сегодня (список)</string>
+    <string name="today_day">сегодня (день)</string>
 </resources>
