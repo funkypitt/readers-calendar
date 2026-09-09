@@ -177,7 +177,7 @@ fun AgendaScreen(nav: Nav, app: App) {
                 if (permitted && byDay.isEmpty()) item { Small(stringResource(R.string.nothing_planned), Modifier.padding(horizontal = rowPadH, vertical = rowPadV)) }
                 for ((date, list) in byDay) {
                     item(key = "d$date") {
-                        Small(dayLabel(date, today, t1, t2), Modifier.padding(horizontal = rowPadH).padding(top = 18.dp, bottom = 2.dp).noRippleClickable { nav.push(Screen.Day(date)) },
+                        Small(dayLabel(date, today, t1, t2), Modifier.padding(horizontal = rowPadH).padding(top = 18.dp, bottom = 2.dp).pressable(onClick = { nav.push(Screen.Day(date)) }, onLongPress = { nav.push(Screen.Edit(0L, date)) }),
                             color = if (date == today) colors.fg else colors.dim)
                     }
                     items(list, key = { it.key }) { o -> OccurrenceRow(o, allDayText) { nav.push(Screen.Event(o.eventId)) } }
@@ -193,7 +193,7 @@ fun AgendaScreen(nav: Nav, app: App) {
         if (landscape) TwoPane(left = {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 16.dp)) {
                 Small(today.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase(), Modifier.padding(horizontal = rowPadH, vertical = 6.dp).noRippleClickable { nav.push(Screen.Month(YearMonth.from(today))) })
-                MonthGrid(YearMonth.from(today), settings.weekStartsMonday, marked, null) { nav.push(Screen.Day(it)) }
+                MonthGrid(YearMonth.from(today), settings.weekStartsMonday, marked, null, onLongDay = { nav.push(Screen.Edit(0L, it)) }) { nav.push(Screen.Day(it)) }
                 Box(Modifier.weight(1f))
                 TextRow(stringResource(R.string.week_view), size = typo.title) { nav.push(Screen.Week(weekStart(today, settings.weekStartsMonday))) }
                 TextRow(stringResource(R.string.workdays_view), size = typo.title) { nav.push(Screen.Week(weekStart(today, true), workdays = true)) }
@@ -217,7 +217,7 @@ fun OccurrenceRow(o: Occurrence, allDayText: String, onClick: () -> Unit) {
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-fun MonthGrid(month: YearMonth, weekStartsMonday: Boolean, marked: Set<LocalDate>, selected: LocalDate?, onDay: (LocalDate) -> Unit) {
+fun MonthGrid(month: YearMonth, weekStartsMonday: Boolean, marked: Set<LocalDate>, selected: LocalDate?, onLongDay: ((LocalDate) -> Unit)? = null, onDay: (LocalDate) -> Unit) {
     val colors = LocalColors.current
     val typo = LocalTypo.current
     val today = LocalDate.now()
@@ -238,7 +238,7 @@ fun MonthGrid(month: YearMonth, weekStartsMonday: Boolean, marked: Set<LocalDate
                     val isToday = d == today
                     val day = d
                     Box(
-                        Modifier.weight(1f).aspectRatio(1f).noRippleClickable { onDay(day) }
+                        Modifier.weight(1f).aspectRatio(1f).then(if (onLongDay != null) Modifier.pressable(onClick = { onDay(day) }, onLongPress = { onLongDay(day) }) else Modifier.noRippleClickable { onDay(day) })
                             .padding(3.dp)
                             .then(if (isToday) Modifier.background(colors.fg) else if (day == selected) Modifier.border(1.dp, colors.fg) else Modifier),
                         contentAlignment = Alignment.Center
@@ -279,7 +279,7 @@ fun MonthScreen(nav: Nav, app: App, month: YearMonth) {
                 Box(Modifier.weight(1f))
                 T("›", Modifier.noRippleClickable { nav.stack[nav.stack.size - 1] = Screen.Month(month.plusMonths(1)) }, size = typo.title, align = TextAlign.End)
             }
-            MonthGrid(month, settings.weekStartsMonday, marked, null) { nav.push(Screen.Day(it)) }
+            MonthGrid(month, settings.weekStartsMonday, marked, null, onLongDay = { nav.push(Screen.Edit(0L, it)) }) { nav.push(Screen.Day(it)) }
             Box(Modifier.weight(1f))
             Rule()
             TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))) }
@@ -434,11 +434,13 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
             ScreenTitle(if (id == 0L) stringResource(R.string.new_event_title) else stringResource(R.string.edit), onBack = { nav.pop() }, trailing = stringResource(R.string.save), onTrailing = { save() })
             if (!loaded) { Small("…", Modifier.padding(rowPadH)); return@Column }
             val whenPart: @Composable () -> Unit = {
-                TextRow(stringResource(R.string.all_day_setting, if (e.allDay) stringResource(R.string.on) else stringResource(R.string.off)), size = typo.title) { e = e.copy(allDay = !e.allDay) }
+                // The common case first: the day, the start, the end. The end date only when it differs.
                 TextRow(e.start.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy")).lowercase(), secondary = stringResource(R.string.starts), size = typo.title) { datePick = "start" }
-                if (!e.allDay) TextRow(e.start.format(f), secondary = stringResource(R.string.start_time), size = typo.title) { prompt = "startTime" }
-                TextRow(e.end.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy")).lowercase(), secondary = stringResource(R.string.ends), size = typo.title) { datePick = "end" }
-                if (!e.allDay) TextRow(e.end.format(f), secondary = stringResource(R.string.end_time), size = typo.title) { prompt = "endTime" }
+                // One row for the times: it asks the start, then the end, in two quick prompts.
+                if (!e.allDay) TextRow(e.start.format(f) + " – " + e.end.format(f), secondary = stringResource(R.string.start_time) + " · " + stringResource(R.string.end_time), size = typo.title) { prompt = "startTime" }
+                TextRow(stringResource(R.string.all_day_setting, if (e.allDay) stringResource(R.string.on) else stringResource(R.string.off)), size = typo.title) { e = e.copy(allDay = !e.allDay) }
+                if (e.allDay || e.end.toLocalDate() != e.start.toLocalDate()) TextRow(e.end.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy")).lowercase(), secondary = stringResource(R.string.ends), size = typo.title) { datePick = "end" }
+                else Small(stringResource(R.string.ends_another_day), Modifier.padding(horizontal = rowPadH, vertical = 8.dp).noRippleClickable { datePick = "end" })
             }
             val whatPart: @Composable () -> Unit = {
                 TextRow(calendars.firstOrNull { it.id == e.calendarId }?.name ?: "…", secondary = stringResource(R.string.calendar), size = typo.title) { choose = "calendar" }
@@ -464,7 +466,7 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
             "title" -> TextPrompt(stringResource(R.string.title_prompt), e.title, onDone = { e = e.copy(title = it); prompt = null }, onCancel = { prompt = null })
             "location" -> TextPrompt(stringResource(R.string.location), e.location, onDone = { e = e.copy(location = it); prompt = null }, onCancel = { prompt = null })
             "description" -> TextPrompt(stringResource(R.string.description), e.description, onDone = { e = e.copy(description = it); prompt = null }, onCancel = { prompt = null })
-            "startTime" -> TimePrompt(stringResource(R.string.start_time), e.start.toLocalTime(), onDone = { t -> val d = java.time.Duration.between(e.start, e.end); val s = LocalDateTime.of(e.start.toLocalDate(), t); e = e.copy(start = s, end = s.plus(d)); prompt = null }, onCancel = { prompt = null })
+            "startTime" -> TimePrompt(stringResource(R.string.start_time), e.start.toLocalTime(), onDone = { t -> val d = java.time.Duration.between(e.start, e.end); val s = LocalDateTime.of(e.start.toLocalDate(), t); e = e.copy(start = s, end = s.plus(d)); prompt = "endTime" }, onCancel = { prompt = null })
             "endTime" -> TimePrompt(stringResource(R.string.end_time), e.end.toLocalTime(), onDone = { t -> e = e.copy(end = LocalDateTime.of(e.end.toLocalDate(), t)); prompt = null }, onCancel = { prompt = null })
         }
         datePick?.let { which ->
@@ -486,7 +488,7 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
 @Composable
 fun TimePrompt(title: String, initial: LocalTime, onDone: (LocalTime) -> Unit, onCancel: () -> Unit) {
     var bad by remember { mutableStateOf(false) }
-    TextPrompt(title + (if (bad) "  (hh:mm)" else ""), initial.format(DateTimeFormatter.ofPattern("HH:mm")), onDone = { text ->
+    TextPrompt(title + (if (bad) "  (hh:mm)" else ""), initial.format(DateTimeFormatter.ofPattern("HH:mm")), keyboard = androidx.compose.ui.text.input.KeyboardType.Number, onDone = { text ->
         val m = Regex("^\\s*(\\d{1,2})\\s*[:hH.]?\\s*(\\d{2})?\\s*$").find(text)
         val h = m?.groupValues?.get(1)?.toIntOrNull(); val mi = m?.groupValues?.get(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 0
         if (m != null && h != null && h in 0..23 && mi in 0..59) onDone(LocalTime.of(h, mi)) else bad = true

@@ -15,6 +15,11 @@ Nextcloud…) — so there is no server setup and nothing new to keep in sync.
   column, each a half of it.
 * **Day**: the same grid, one column wide, with the place next to the time. In the menu it is
   "today (day view)", next to "today (list)" for the agenda.
+* **Creating an event** is the one frequent action, so it is a tap away everywhere: the
+  "+ new event" row at the bottom of every view, a tap on an empty slot in a grid, a long press
+  on a day in the month grid or on a day heading in the agenda, the + of the launcher's agenda
+  tile. The form asks the title first, keyboard up; then one row for the day, one for the times
+  (start, then end, two quick numeric prompts); everything else below, already sensible.
 * The ⋯ menu is the same on every view: new event first, then the views, the calendars, the
   colours and the settings.
 * The app opens on the week; settings › "opens on" switches that to the agenda, the workdays, the day or

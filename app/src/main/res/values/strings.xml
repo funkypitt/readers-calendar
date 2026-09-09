@@ -77,4 +77,5 @@
     <string name="workdays_view">workdays</string>
     <string name="today_list">today (list)</string>
     <string name="today_day">today (day view)</string>
+    <string name="ends_another_day">ends another day</string>
 </resources>

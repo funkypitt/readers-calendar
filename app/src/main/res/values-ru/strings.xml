@@ -76,4 +76,5 @@
     <string name="workdays_view">будни</string>
     <string name="today_list">сегодня (список)</string>
     <string name="today_day">сегодня (день)</string>
+    <string name="ends_another_day">заканчивается в другой день</string>
 </resources>

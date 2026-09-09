@@ -76,4 +76,5 @@
     <string name="workdays_view">jours ouvrés</string>
     <string name="today_list">aujourd\'hui (liste)</string>
     <string name="today_day">aujourd\'hui (vue jour)</string>
+    <string name="ends_another_day">se termine un autre jour</string>
 </resources>

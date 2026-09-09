@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -233,6 +234,7 @@ fun TextPrompt(
     title: String,
     initial: String = "",
     confirm: String = stringResource(R.string.action_ok),
+    keyboard: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
     onDone: (String) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -241,20 +243,22 @@ fun TextPrompt(
     val focus = remember { FocusRequester() }
     BackHandler(onBack = onCancel)
     LaunchedEffect(Unit) { focus.requestFocus() }
+    // Centred in whatever the keyboard leaves free, never under it.
     Box(
         Modifier
             .fillMaxSize()
             .background(colors.bg.copy(alpha = 0.6f))
             .noRippleClickable(onClick = onCancel)
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .windowInsetsPadding(WindowInsets.navigationBars)
             .imePadding()
     ) {
         Column(
             Modifier
-                .align(Alignment.BottomCenter)
+                .align(Alignment.Center)
                 .fillMaxWidth()
                 .background(colors.bg)
                 .noRippleClickable { }
-                .windowInsetsPadding(WindowInsets.navigationBars)
         ) {
             Rule(color = colors.fg)
             Small(title, Modifier.padding(horizontal = rowPadH).padding(top = 14.dp))
@@ -263,7 +267,8 @@ fun TextPrompt(
                 onValueChange = { value = it },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 10.dp).focusRequester(focus),
                 imeAction = ImeAction.Done,
-                onImeAction = { if (value.isNotBlank()) onDone(value.trim()) }
+                onImeAction = { if (value.isNotBlank()) onDone(value.trim()) },
+                keyboard = keyboard
             )
             Rule()
             Row(Modifier.fillMaxWidth()) {
@@ -272,7 +277,7 @@ fun TextPrompt(
                     TextRow(confirm, inverted = value.isNotBlank(), onClick = { if (value.isNotBlank()) onDone(value.trim()) })
                 }
             }
-            Spacer(Modifier.height(8.dp))
+            Rule(color = colors.fg)
         }
     }
 }
@@ -285,7 +290,8 @@ fun ReaderTextField(
     placeholder: String = "",
     imeAction: ImeAction = ImeAction.Search,
     onImeAction: () -> Unit = {},
-    password: Boolean = false
+    password: Boolean = false,
+    keyboard: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text
 ) {
     val colors = LocalColors.current
     val typo = LocalTypo.current
@@ -296,7 +302,7 @@ fun ReaderTextField(
         singleLine = true,
         textStyle = TextStyle(color = colors.fg, fontFamily = typo.family, fontWeight = typo.weight, fontSize = typo.tile),
         cursorBrush = SolidColor(colors.fg),
-        keyboardOptions = KeyboardOptions(imeAction = imeAction, keyboardType = if (password) androidx.compose.ui.text.input.KeyboardType.Password else androidx.compose.ui.text.input.KeyboardType.Text),
+        keyboardOptions = KeyboardOptions(imeAction = imeAction, keyboardType = if (password) androidx.compose.ui.text.input.KeyboardType.Password else keyboard),
         visualTransformation = if (password) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardActions = KeyboardActions(onAny = { onImeAction() }),
         decorationBox = { inner ->
@@ -310,6 +316,12 @@ fun ReaderTextField(
 
 @Composable
 fun VSpace(h: Dp) = Spacer(Modifier.height(h))
+
+/** Tap and long press on the same element, without ripple. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun Modifier.pressable(onClick: () -> Unit, onLongPress: () -> Unit): Modifier = this.then(
+    Modifier.combinedClickable(interactionSource = MutableInteractionSource(), indication = null, onLongClick = onLongPress, onClick = onClick)
+)
 
 /** One haptic tick, if enabled. */
 @Composable

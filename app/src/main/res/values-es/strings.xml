@@ -76,4 +76,5 @@
     <string name="workdays_view">días laborables</string>
     <string name="today_list">hoy (lista)</string>
     <string name="today_day">hoy (vista de día)</string>
+    <string name="ends_another_day">termina otro día</string>
 </resources>

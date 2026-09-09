@@ -76,4 +76,5 @@
     <string name="workdays_view">dias úteis</string>
     <string name="today_list">hoje (lista)</string>
     <string name="today_day">hoje (vista de dia)</string>
+    <string name="ends_another_day">termina noutro dia</string>
 </resources>
