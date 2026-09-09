@@ -11,8 +11,9 @@ Nextcloud…) — so there is no server setup and nothing new to keep in sync.
   solid blocks so the gaps between them read as free time, overlapping events side by side,
   all-day events in a strip above, the present moment as a line. Swipe sideways for the next
   week, tap a day header for that day, tap an empty slot for a new event at that hour.
-* **Workdays**: the same week with Monday to Friday full width, Saturday and Sunday sharing one
-  column, each a half of it.
+* **Workdays**: Monday to Friday at full width; the weekend folded into a narrow strip at the
+  right, one letter per day and a dot when the day holds something. Tap the strip for the whole
+  week. The blocks' text is one step larger there, since the columns are wider.
 * **Day**: the same grid, one column wide, with the place next to the time. In the menu it is
   "today (day view)", next to "today (list)" for the agenda.
 * **Creating an event** is the one frequent action, so it is a tap away everywhere: the
