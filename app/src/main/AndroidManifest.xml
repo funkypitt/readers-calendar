@@ -53,5 +53,28 @@
                 <data android:mimeType="vnd.android.cursor.dir/event" />
             </intent-filter>
         </activity>
+
+        <!-- Standard widgets for any launcher: the next event, or today and tomorrow. -->
+        <receiver android:name=".widget.LineWidget" android:exported="true" android:label="@string/widget_line_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PROVIDER_CHANGED" />
+                <data android:scheme="content" android:host="com.android.calendar" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_line_info" />
+        </receiver>
+        <receiver android:name=".widget.ListWidget" android:exported="true" android:label="@string/widget_list_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.PROVIDER_CHANGED" />
+                <data android:scheme="content" android:host="com.android.calendar" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_list_info" />
+        </receiver>
+        <service android:name=".widget.ListService" android:permission="android.permission.BIND_REMOTEVIEWS" android:exported="false" />
     </application>
 </manifest>

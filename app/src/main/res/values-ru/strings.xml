@@ -77,4 +77,8 @@
     <string name="today_list">сегодня (список)</string>
     <string name="today_day">сегодня (день)</string>
     <string name="ends_another_day">заканчивается в другой день</string>
+    <string name="widget_line_name">Reader\'s Calendar · ближайшее событие</string>
+    <string name="widget_list_name">Reader\'s Calendar · сегодня и завтра</string>
+    <string name="widget_line_desc">ближайшее событие, + для нового</string>
+    <string name="widget_list_desc">события сегодня и завтра, + для нового</string>
 </resources>

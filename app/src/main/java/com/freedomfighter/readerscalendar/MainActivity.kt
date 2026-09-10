@@ -77,6 +77,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() { super.onResume(); nav.version++ }
 
+    override fun onPause() { super.onPause(); com.freedomfighter.readerscalendar.widget.CalendarWidgets.refresh(this) }
+
     /** content://com.android.calendar/time/<millis> → that day; /events/<id> → the event; INSERT → new event. */
     private fun handle(intent: Intent?) {
         val data = intent?.data

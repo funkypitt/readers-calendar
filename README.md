@@ -46,3 +46,7 @@ event, so it can be the default calendar app, including for the launcher's agend
 ```
 
 Kotlin, Jetpack Compose (foundation only), CalendarContract. No other dependency. MIT.
+
+## Widgets
+
+Two standard home-screen widgets for any launcher: the next event (one line, + for a new one) and today and tomorrow as a list.

@@ -77,4 +77,8 @@
     <string name="today_list">hoje (lista)</string>
     <string name="today_day">hoje (vista de dia)</string>
     <string name="ends_another_day">termina noutro dia</string>
+    <string name="widget_line_name">Reader\'s Calendar · próximo evento</string>
+    <string name="widget_list_name">Reader\'s Calendar · hoje e amanhã</string>
+    <string name="widget_line_desc">o próximo evento, + para criar um</string>
+    <string name="widget_list_desc">os eventos de hoje e amanhã, + para criar um</string>
 </resources>
