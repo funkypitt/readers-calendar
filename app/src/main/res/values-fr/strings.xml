@@ -66,6 +66,7 @@
     <string name="off">non</string>
     <string name="about">reader\'s calendar %1$s</string>
     <string name="about_line">noir et blanc, texte seulement. Licence MIT.</string>
+    <string name="credits">Pierre Gallaz · développé avec Claude Code</string>
     <string name="action_ok">ok</string>
     <string name="action_cancel">annuler</string>
     <string name="search">rechercher</string>

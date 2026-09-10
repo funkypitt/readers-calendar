@@ -1,0 +1,18 @@
+Un calendrier noir et blanc, texte seulement, pensé pour les téléphones e-ink et pour qui préfère les mots aux pavés de couleur. Pas d'icônes, pas de couleurs : blanc sur noir ou noir sur blanc, serif, sans ou mono, trois tailles de texte. Fait partie de la famille Reader's (Reader's Launcher, Tasks, Notes, Books…).
+
+Il lit et écrit les agendas du téléphone, ceux que vos comptes synchronisent déjà (Google, Infomaniak kSync, DAVx5, Nextcloud…) : aucun serveur à configurer, rien de nouveau à synchroniser.
+
+Vues :
+• Agenda : les jours à venir en liste, groupés par jour.
+• Mois : une grille de chiffres ; un point marque les jours qui ont un événement, aujourd'hui est inversé.
+• Semaine et jours ouvrés : une grille horaire, les événements en blocs pleins pour que les creux se lisent comme du temps libre, les chevauchements côte à côte, les événements sur la journée dans un bandeau au-dessus, l'instant présent comme une ligne. Balayer pour la semaine suivante, taper un créneau vide pour un nouvel événement à cette heure.
+• Jour : la même grille, une colonne, avec le lieu à côté de l'heure.
+• En paysage, la grille du mois s'affiche à côté de l'agenda.
+
+Créer un événement est l'action fréquente, elle est donc à un tap partout : une ligne « + nouvel événement » au bas de chaque vue, un tap sur un créneau vide, un appui long sur un jour. Le formulaire demande d'abord le titre, clavier ouvert, puis le jour et les heures en questions rapides ; le reste est déjà raisonnable. Un événement porte sa répétition, son rappel, son agenda, un lieu et une description. Choisissez les agendas affichés et celui par défaut pour les nouveaux événements.
+
+Deux widgets standard pour n'importe quel lanceur : le prochain événement (une ligne, + pour en créer un) et aujourd'hui et demain en liste. Les autres applications peuvent l'ouvrir sur un jour, un événement ou un nouvel événement : il peut être l'application calendrier par défaut.
+
+Pas de réseau propre, pas de compte, pas de pistage. Anglais, français, allemand, espagnol, portugais, russe. Logiciel libre, licence MIT.
+
+Pierre Gallaz · développé avec Claude Code

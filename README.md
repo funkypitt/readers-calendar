@@ -50,3 +50,11 @@ Kotlin, Jetpack Compose (foundation only), CalendarContract. No other dependency
 ## Widgets
 
 Two standard home-screen widgets for any launcher: the next event (one line, + for a new one) and today and tomorrow as a list.
+
+## Crédits / Credits
+
+© 2026 Pierre Gallaz. Développé avec [Claude Code](https://claude.com/claude-code) (Anthropic).
+Licence MIT, voir `LICENSE`.
+
+© 2026 Pierre Gallaz. Developed with [Claude Code](https://claude.com/claude-code) (Anthropic).
+MIT licence, see `LICENSE`.

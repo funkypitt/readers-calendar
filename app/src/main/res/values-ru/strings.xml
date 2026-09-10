@@ -66,6 +66,7 @@
     <string name="off">выкл</string>
     <string name="about">reader\'s calendar %1$s</string>
     <string name="about_line">чёрно-белое, только текст. Лицензия MIT.</string>
+    <string name="credits">Pierre Gallaz · разработано с Claude Code</string>
     <string name="action_ok">ок</string>
     <string name="action_cancel">отмена</string>
     <string name="search">поиск</string>

@@ -1,0 +1,1 @@
+Black-and-white, text-only calendar for e-ink; uses the phone's own calendars
