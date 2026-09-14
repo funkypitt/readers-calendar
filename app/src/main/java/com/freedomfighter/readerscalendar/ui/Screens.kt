@@ -61,6 +61,11 @@ import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
 import java.util.Locale
 
 sealed class Screen {
@@ -258,34 +263,115 @@ fun MonthGrid(month: YearMonth, weekStartsMonday: Boolean, marked: Set<LocalDate
 }
 
 
+/**
+ * The month as a board: six weeks of days that fill the screen, and in every day the events
+ * themselves — a line each, the all-day ones first, then "09:00 title" — instead of a dot. What
+ * does not fit shows as "+2". Today's number is inverted, the other month's days are dim. Tap a
+ * day for its grid, long press for a new event, swipe for the next or previous month.
+ */
+@Composable
+fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Occurrence>, onDay: (LocalDate) -> Unit, onLongDay: (LocalDate) -> Unit, onSwipe: (Int) -> Unit) {
+    val colors = LocalColors.current
+    val typo = LocalTypo.current
+    val today = LocalDate.now()
+    val zone = ZoneId.systemDefault()
+    val first = if (weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
+    val start = month.atDay(1).let { d -> d.minusDays(((d.dayOfWeek.value - first.value + 7) % 7).toLong()) }
+    val weeks = run { var n = 0; var d = start; while (d.isBefore(month.atEndOfMonth().plusDays(1)) || d.dayOfWeek != first) { d = d.plusDays(7); n++ }; n }
+    // every day an event touches, in the order they start; an all-day event ends the day before its end
+    val byDay = remember(occurrences) {
+        val m = HashMap<LocalDate, MutableList<Occurrence>>()
+        for (o in occurrences) {
+            val a = o.date
+            val b = Instant.ofEpochMilli(o.end).atZone(zone).toLocalDate().let { if (o.allDay || Instant.ofEpochMilli(o.end).atZone(zone).toLocalTime() == LocalTime.MIDNIGHT) it.minusDays(1) else it }
+            var d = a
+            while (!d.isAfter(maxOf(a, b))) { m.getOrPut(d) { mutableListOf() } += o; d = d.plusDays(1) }
+        }
+        m
+    }
+    var dragged by remember { mutableFloatStateOf(0f) }
+    val lineSize = typo.small * 0.72f
+    Column(Modifier.fillMaxSize().pointerInput(month) {
+        detectHorizontalDragGestures(
+            onDragStart = { dragged = 0f },
+            onDragEnd = { if (abs(dragged) > 80.dp.toPx()) onSwipe(if (dragged < 0) 1 else -1) },
+            onDragCancel = { dragged = 0f }
+        ) { _, dx -> dragged += dx }
+    }) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            T("‹", Modifier.width(28.dp).noRippleClickable { onSwipe(-1) }, size = typo.title, color = colors.dim, align = TextAlign.Center)
+            for (i in 0 until 7) {
+                val dow = first.plus(i.toLong())
+                Small(dow.getDisplayName(TextStyle.SHORT, Locale.getDefault()).lowercase().trimEnd('.'), Modifier.weight(1f), align = TextAlign.Center, maxLines = 1)
+            }
+            T("›", Modifier.width(28.dp).noRippleClickable { onSwipe(1) }, size = typo.title, color = colors.dim, align = TextAlign.Center)
+        }
+        Rule()
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            val rowH = maxHeight / weeks
+            // A phone-wide cell has room for a title or a time, not both: the title says more.
+            val withTime = (maxWidth - 56.dp) / 7 >= 110.dp
+            // lines of events a day can hold under its number (the number takes ~1.4 lines of small)
+            val lines = ((rowH - typo.small.value.dp * 1.5f) / (lineSize.value.dp * 1.25f)).toInt().coerceIn(1, 8)
+            Column(Modifier.fillMaxSize().padding(horizontal = 4.dp)) {
+                var d = start
+                repeat(weeks) {
+                    Row(Modifier.fillMaxWidth().weight(1f)) {
+                        Box(Modifier.width(28.dp))
+                        for (i in 0 until 7) {
+                            val day = d
+                            val inMonth = YearMonth.from(day) == month
+                            val isToday = day == today
+                            val list = byDay[day].orEmpty()
+                            val shown = if (list.size > lines) lines - 1 else list.size
+                            Column(
+                                Modifier.weight(1f).fillMaxHeight().pressable(onClick = { onDay(day) }, onLongPress = { onLongDay(day) })
+                                    .border(0.5.dp, colors.rule).padding(horizontal = 2.dp, vertical = 1.dp)
+                            ) {
+                                Box(Modifier.then(if (isToday) Modifier.background(colors.fg) else Modifier).padding(horizontal = 3.dp)) {
+                                    T(day.dayOfMonth.toString(), size = typo.small, color = if (isToday) colors.bg else if (inMonth) colors.fg else colors.rule, align = TextAlign.Start, maxLines = 1)
+                                }
+                                for (o in list.take(shown)) {
+                                    val text = if (o.allDay || o.date != day || !withTime) o.title else Instant.ofEpochMilli(o.begin).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) + " " + o.title
+                                    T(text, size = lineSize, color = if (inMonth) colors.fg else colors.dim, align = TextAlign.Start, maxLines = 1, softWrap = false, lineHeightMul = 1.25f)
+                                }
+                                if (list.size > shown) T("+${list.size - shown}", size = lineSize, color = colors.dim, align = TextAlign.Start, maxLines = 1, lineHeightMul = 1.25f)
+                            }
+                            d = d.plusDays(1)
+                        }
+                        Box(Modifier.width(28.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun MonthScreen(nav: Nav, app: App, month: YearMonth) {
     val settings by app.prefs.settings.collectAsState()
     val typo = LocalTypo.current
     val zone = ZoneId.systemDefault()
     BackHandler { nav.pop() }
-    val marked by produceState<Set<LocalDate>>(emptySet(), month, nav.version, settings.hiddenCalendars) {
+    val occurrences by produceState<List<Occurrence>>(emptyList(), month, nav.version, settings.hiddenCalendars) {
         value = withContext(Dispatchers.IO) {
             val from = month.atDay(1).minusDays(7).atStartOfDay(zone).toInstant().toEpochMilli(); val to = month.atEndOfMonth().plusDays(8).atStartOfDay(zone).toInstant().toEpochMilli()
-            app.calendars.occurrences(from, to, settings.hiddenCalendars).map { it.date }.toSet()
+            app.calendars.occurrences(from, to, settings.hiddenCalendars)
         }
     }
     var menu by remember { mutableStateOf(false) }
+    fun go(m: YearMonth) { nav.stack[nav.stack.size - 1] = Screen.Month(m) }
     Page {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase(), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
-            Row(Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 10.dp)) {
-                T("‹", Modifier.noRippleClickable { nav.stack[nav.stack.size - 1] = Screen.Month(month.minusMonths(1)) }, size = typo.title, align = TextAlign.Start)
-                Box(Modifier.weight(1f))
-                T("›", Modifier.noRippleClickable { nav.stack[nav.stack.size - 1] = Screen.Month(month.plusMonths(1)) }, size = typo.title, align = TextAlign.End)
+            Box(Modifier.weight(1f)) {
+                MonthBoard(month, settings.weekStartsMonday, occurrences, onDay = { nav.push(Screen.Day(it)) }, onLongDay = { nav.push(Screen.Edit(0L, it)) }, onSwipe = { go(month.plusMonths(it.toLong())) })
             }
-            MonthGrid(month, settings.weekStartsMonday, marked, null, onLongDay = { nav.push(Screen.Edit(0L, it)) }) { nav.push(Screen.Day(it)) }
-            Box(Modifier.weight(1f))
             Rule()
             TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))) }
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
-        if (menu) ViewsMenu(nav, app, onDismiss = { menu = false }, first = listOf(MenuItem(stringResource(R.string.go_today)) { nav.stack[nav.stack.size - 1] = Screen.Month(YearMonth.from(LocalDate.now())) }), newEventDate = if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))
+        if (menu) ViewsMenu(nav, app, onDismiss = { menu = false }, first = listOf(MenuItem(stringResource(R.string.go_today)) { go(YearMonth.from(LocalDate.now())) }), newEventDate = if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))
     }
 }
 
