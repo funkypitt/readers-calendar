@@ -156,7 +156,8 @@ fun TimeGrid(
     val single = days.size == 1
     val hourHeight = if (single) 60.dp else 52.dp
     val gutter = 40.dp
-    val blockSize: TextUnit = if (compact && compactWeekend) typo.small * 0.82f else if (compact) typo.small * 0.72f else typo.small
+    // The week blocks are narrow: a size down shows more of each title (the user's preference, as in the month).
+    val blockSize: TextUnit = if (compact && compactWeekend) typo.small * 0.72f else if (compact) typo.small * 0.64f else typo.small
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     val f = timeFmt()
