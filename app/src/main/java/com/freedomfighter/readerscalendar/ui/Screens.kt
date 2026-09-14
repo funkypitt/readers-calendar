@@ -290,7 +290,7 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
         m
     }
     var dragged by remember { mutableFloatStateOf(0f) }
-    val lineSize = typo.small * 0.72f
+    val lineSize = typo.small * 0.8f
     Column(Modifier.fillMaxSize().pointerInput(month) {
         detectHorizontalDragGestures(
             onDragStart = { dragged = 0f },
@@ -298,26 +298,24 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
             onDragCancel = { dragged = 0f }
         ) { _, dx -> dragged += dx }
     }) {
+        // No ‹ ›: the swipe turns the month, and the 56 dp they took go to the days.
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            T("‹", Modifier.width(28.dp).noRippleClickable { onSwipe(-1) }, size = typo.title, color = colors.dim, align = TextAlign.Center)
             for (i in 0 until 7) {
                 val dow = first.plus(i.toLong())
                 Small(dow.getDisplayName(TextStyle.SHORT, Locale.getDefault()).lowercase().trimEnd('.'), Modifier.weight(1f), align = TextAlign.Center, maxLines = 1)
             }
-            T("›", Modifier.width(28.dp).noRippleClickable { onSwipe(1) }, size = typo.title, color = colors.dim, align = TextAlign.Center)
         }
         Rule()
         BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
             val rowH = maxHeight / weeks
             // A phone-wide cell has room for a title or a time, not both: the title says more.
-            val withTime = (maxWidth - 56.dp) / 7 >= 110.dp
+            val withTime = maxWidth / 7 >= 110.dp
             // lines of events a day can hold under its number (the number takes ~1.4 lines of small)
             val lines = ((rowH - typo.small.value.dp * 1.5f) / (lineSize.value.dp * 1.25f)).toInt().coerceIn(1, 8)
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp)) {
                 var d = start
                 repeat(weeks) {
                     Row(Modifier.fillMaxWidth().weight(1f)) {
-                        Box(Modifier.width(28.dp))
                         for (i in 0 until 7) {
                             val day = d
                             val inMonth = YearMonth.from(day) == month
@@ -339,7 +337,6 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
                             }
                             d = d.plusDays(1)
                         }
-                        Box(Modifier.width(28.dp))
                     }
                 }
             }
@@ -392,11 +389,6 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
     Page {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(dayLabel(date, LocalDate.now(), stringResource(R.string.today), stringResource(R.string.tomorrow)), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
-            Row(Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 2.dp)) {
-                T("‹", Modifier.noRippleClickable { go(date.minusDays(1)) }, size = typo.title, align = TextAlign.Start)
-                Box(Modifier.weight(1f))
-                T("›", Modifier.noRippleClickable { go(date.plusDays(1)) }, size = typo.title, align = TextAlign.End)
-            }
             TimeGrid(
                 listOf(date), list, LocalDate.now(), Modifier.weight(1f), compact = false,
                 onEvent = { nav.push(Screen.Event(it.eventId)) },

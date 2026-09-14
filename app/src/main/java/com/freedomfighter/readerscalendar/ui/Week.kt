@@ -148,7 +148,8 @@ fun TimeGrid(
     val weekend = days - shown.toSet()
     val stripW = 28.dp
     fun weightOf(@Suppress("UNUSED_PARAMETER") d: LocalDate): Float = 1f
-    val arrowEnd = 28.dp
+    // The swipe turns the week; no › at the right, only a breath of margin, and the columns take the rest.
+    val arrowEnd = 6.dp
     val colors = LocalColors.current
     val typo = LocalTypo.current
     val zone = ZoneId.systemDefault()
@@ -178,8 +179,7 @@ fun TimeGrid(
     } else Modifier
     Column(modifier.fillMaxWidth().then(swipeMod)) {
         if (!single) Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-            // ‹ › sit in the gutter and the right margin, so the header row is also the navigation row.
-            Box(Modifier.width(gutter).fillMaxHeight().then(if (onSwipe != null) Modifier.noRippleClickable { onSwipe(-1) } else Modifier), contentAlignment = Alignment.Center) { T("‹", size = typo.title, color = colors.dim, align = TextAlign.Center) }
+            Box(Modifier.width(gutter).fillMaxHeight())
             for (d in shown) {
                 val isToday = d == today
                 val narrow = weightOf(d) < 1f
@@ -205,7 +205,7 @@ fun TimeGrid(
                     }
                 }
             }
-            Box(Modifier.width(arrowEnd).fillMaxHeight().then(if (onSwipe != null) Modifier.noRippleClickable { onSwipe(1) } else Modifier), contentAlignment = Alignment.Center) { T("›", size = typo.title, color = colors.dim, align = TextAlign.Center) }
+            Box(Modifier.width(arrowEnd).fillMaxHeight())
         }
         if (allDay.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(end = if (single) 8.dp else arrowEnd, top = 4.dp)) {
             Box(Modifier.width(gutter))
