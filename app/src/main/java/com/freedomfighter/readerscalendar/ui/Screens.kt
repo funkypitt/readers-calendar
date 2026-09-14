@@ -290,7 +290,7 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
         m
     }
     var dragged by remember { mutableFloatStateOf(0f) }
-    val lineSize = typo.small * 0.8f
+    val lineSize = typo.small * 0.72f
     Column(Modifier.fillMaxSize().pointerInput(month) {
         detectHorizontalDragGestures(
             onDragStart = { dragged = 0f },
