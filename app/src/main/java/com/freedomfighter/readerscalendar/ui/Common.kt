@@ -40,8 +40,17 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -228,18 +237,23 @@ fun TextMenu(title: String?, items: List<MenuItem>, onDismiss: () -> Unit, foote
     }
 }
 
-/** Single-line text prompt (category name, city, task…). */
+/**
+ * Single-line text prompt (category name, city, task…). With [selectAll] the suggested text
+ * opens selected, so the first key replaces it instead of landing after its last character.
+ */
 @Composable
 fun TextPrompt(
     title: String,
     initial: String = "",
     confirm: String = stringResource(R.string.action_ok),
     keyboard: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
+    selectAll: Boolean = false,
     onDone: (String) -> Unit,
     onCancel: () -> Unit
 ) {
     val colors = LocalColors.current
-    var value by remember { mutableStateOf(initial) }
+    var field by remember { mutableStateOf(TextFieldValue(initial, selection = if (selectAll) TextRange(0, initial.length) else TextRange(initial.length))) }
+    val value = field.text
     val focus = remember { FocusRequester() }
     BackHandler(onBack = onCancel)
     LaunchedEffect(Unit) { focus.requestFocus() }
@@ -263,8 +277,8 @@ fun TextPrompt(
             Rule(color = colors.fg)
             Small(title, Modifier.padding(horizontal = rowPadH).padding(top = 14.dp))
             ReaderTextField(
-                value = value,
-                onValueChange = { value = it },
+                value = field,
+                onValueChange = { field = it },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 10.dp).focusRequester(focus),
                 imeAction = ImeAction.Done,
                 onImeAction = { if (value.isNotBlank()) onDone(value.trim()) },
@@ -282,10 +296,11 @@ fun TextPrompt(
     }
 }
 
+/** The prompt's field; the selection is in the caller's hands, so a suggestion can open selected. */
 @Composable
 fun ReaderTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "",
     imeAction: ImeAction = ImeAction.Search,
@@ -307,7 +322,7 @@ fun ReaderTextField(
         keyboardActions = KeyboardActions(onAny = { onImeAction() }),
         decorationBox = { inner ->
             Box {
-                if (value.isEmpty()) T(placeholder, color = colors.dim, align = TextAlign.Start)
+                if (value.text.isEmpty()) T(placeholder, color = colors.dim, align = TextAlign.Start)
                 inner()
             }
         }
@@ -322,6 +337,35 @@ fun VSpace(h: Dp) = Spacer(Modifier.height(h))
 fun Modifier.pressable(onClick: () -> Unit, onLongPress: () -> Unit): Modifier = this.then(
     Modifier.combinedClickable(interactionSource = MutableInteractionSource(), indication = null, onLongClick = onLongPress, onClick = onClick)
 )
+
+/**
+ * Tap, or long press then drag, on one element — the way an event is moved in the grids. A
+ * quick release is [onTap]; a long press calls [onStart] with the finger's position in the
+ * element and begins a drag reported through [onDrag] as the total offset since the press,
+ * then [onDrop] (true when released, false when cancelled). The down is consumed, so the
+ * container's own long press (a new event) never fires under it; a movement before the long
+ * press is left to the container's scroll or swipe, as before.
+ */
+fun Modifier.dragAfterLongPress(key: Any?, onTap: () -> Unit, onStart: (Offset) -> Unit, onDrag: (Offset) -> Unit, onDrop: (Boolean) -> Unit): Modifier = pointerInput(key) {
+    awaitEachGesture {
+        val down = awaitFirstDown()
+        down.consume()
+        val press = awaitLongPressOrCancellation(down.id)
+        if (press == null) {
+            val change = currentEvent.changes.firstOrNull { it.id == down.id }
+            if (change != null && !change.pressed && !change.isConsumed) { change.consume(); onTap() }
+            return@awaitEachGesture
+        }
+        onStart(press.position)
+        var total = Offset.Zero
+        val released = drag(press.id) { change ->
+            total += change.positionChange()
+            change.consume()
+            onDrag(total)
+        }
+        onDrop(released)
+    }
+}
 
 /** One haptic tick, if enabled. */
 @Composable

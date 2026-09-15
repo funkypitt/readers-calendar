@@ -20,6 +20,8 @@
     <string name="delete">löschen</string>
     <string name="delete_confirm">diesen Termin löschen?</string>
     <string name="whole_series">(die ganze Serie)</string>
+    <string name="move_confirm">die ganze Serie verschieben?</string>
+    <string name="move">verschieben</string>
     <string name="save">speichern</string>
     <string name="title_prompt">Titel</string>
     <string name="all_day_setting">ganztägig: %1$s</string>

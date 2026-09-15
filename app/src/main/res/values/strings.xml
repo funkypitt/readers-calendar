@@ -21,6 +21,8 @@
     <string name="delete">delete</string>
     <string name="delete_confirm">delete this event?</string>
     <string name="whole_series">(the whole series)</string>
+    <string name="move_confirm">move the whole series?</string>
+    <string name="move">move</string>
     <string name="save">save</string>
     <string name="title_prompt">title</string>
     <string name="all_day_setting">all day: %1$s</string>

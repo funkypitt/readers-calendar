@@ -65,7 +65,12 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 import kotlin.math.abs
+import kotlin.math.roundToInt
+import java.time.temporal.ChronoUnit
 import java.util.Locale
 
 sealed class Screen {
@@ -88,6 +93,46 @@ class Nav {
     fun home() { while (stack.size > 1) stack.removeAt(stack.size - 1) }
     /** Refresh counter: bump after a write so lists re-query. */
     var version by mutableIntStateOf(0)
+}
+
+// ---------------------------------------------------------------------------------------------
+// Moving an event by dragging it in a grid
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * What a drop in a grid asks for: the event shifted by whole days and minutes. A series asks
+ * first, since every occurrence moves with it; an event of a read-only calendar is refused.
+ * The grids keep the block where it was dropped until the lists come back refreshed, so a
+ * refused or cancelled move snaps back on the refresh.
+ */
+class Mover(private val app: App, private val nav: Nav, private val scope: CoroutineScope) {
+    class Pending(val id: Long, val days: Int, val minutes: Int)
+    var pending by mutableStateOf<Pending?>(null)
+        private set
+    private var applied = false
+
+    /** True when the event will move — now, or once the series is confirmed. */
+    fun move(o: Occurrence, days: Int, minutes: Int): Boolean {
+        if (days == 0 && minutes == 0) return false
+        if (app.calendars.calendars().firstOrNull { it.id == o.calendarId }?.writable != true) return false
+        if (app.calendars.repeats(o.eventId)) { applied = false; pending = Pending(o.eventId, days, minutes); return true }
+        apply(o.eventId, days, minutes); return true
+    }
+
+    fun apply(id: Long, days: Int, minutes: Int) { applied = true; runCatching { app.calendars.shift(id, days, minutes) }; nav.version++ }
+
+    /** The sheet closed; unless a choice was made just after, the lists refresh and the block goes back. */
+    fun dismiss() { pending = null; scope.launch { if (!applied) nav.version++ } }
+}
+
+@Composable
+fun rememberMover(nav: Nav, app: App): Mover { val scope = rememberCoroutineScope(); return remember { Mover(app, nav, scope) } }
+
+/** The "move the whole series?" sheet, when a dropped event repeats. */
+@Composable
+fun MoveConfirm(m: Mover) {
+    val p = m.pending ?: return
+    TextMenu(title = stringResource(R.string.move_confirm), items = listOf(MenuItem(stringResource(R.string.move)) { m.apply(p.id, p.days, p.minutes) }), onDismiss = { m.dismiss() })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -263,21 +308,32 @@ fun MonthGrid(month: YearMonth, weekStartsMonday: Boolean, marked: Set<LocalDate
 }
 
 
+/** An event line being dragged across the board (or just dropped, until the refresh): from which day, over which day. */
+private data class BoardDrag(val o: Occurrence, val from: LocalDate, val target: LocalDate)
+
 /**
  * The month as a board: six weeks of days that fill the screen, and in every day the events
  * themselves — a line each, the all-day ones first, then "09:00 title" — instead of a dot. What
  * does not fit shows as "+2". Today's number is inverted, the other month's days are dim. Tap a
- * day for its grid, long press for a new event, swipe for the next or previous month.
+ * day for its grid, long press for a new event, swipe for the next or previous month. A long
+ * press on an event line lifts it: the day under the finger is framed and shows the line, and
+ * on release [onMove] gets the day shift (answering whether the move is taken).
  */
 @Composable
-fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Occurrence>, onDay: (LocalDate) -> Unit, onLongDay: (LocalDate) -> Unit, onSwipe: (Int) -> Unit) {
+fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Occurrence>, onDay: (LocalDate) -> Unit, onLongDay: (LocalDate) -> Unit, onSwipe: (Int) -> Unit, onMove: ((Occurrence, Int) -> Boolean)? = null) {
     val colors = LocalColors.current
     val typo = LocalTypo.current
     val today = LocalDate.now()
     val zone = ZoneId.systemDefault()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val tick = rememberTick()
     val first = if (weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
     val start = month.atDay(1).let { d -> d.minusDays(((d.dayOfWeek.value - first.value + 7) % 7).toLong()) }
     val weeks = run { var n = 0; var d = start; while (d.isBefore(month.atEndOfMonth().plusDays(1)) || d.dayOfWeek != first) { d = d.plusDays(7); n++ }; n }
+    val last = start.plusDays(weeks * 7L - 1)
+    var drag by remember { mutableStateOf<BoardDrag?>(null) }
+    var settled by remember { mutableStateOf<BoardDrag?>(null) }
+    LaunchedEffect(occurrences) { settled = null }
     // every day an event touches, in the order they start; an all-day event ends the day before its end
     val byDay = remember(occurrences) {
         val m = HashMap<LocalDate, MutableList<Occurrence>>()
@@ -312,6 +368,9 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
             val withTime = maxWidth / 7 >= 110.dp
             // lines of events a day can hold under its number (the number takes ~1.4 lines of small)
             val lines = ((rowH - typo.small.value.dp * 1.5f) / (lineSize.value.dp * 1.25f)).toInt().coerceIn(1, 8)
+            val cellWPx = with(density) { ((maxWidth - 8.dp) / 7).toPx() }
+            val rowHPx = with(density) { rowH.toPx() }
+            val ghost = drag ?: settled
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp)) {
                 var d = start
                 repeat(weeks) {
@@ -320,18 +379,34 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
                             val day = d
                             val inMonth = YearMonth.from(day) == month
                             val isToday = day == today
-                            val list = byDay[day].orEmpty()
+                            // the lifted line shows in the day under the finger, first, and stays dim where it came from
+                            val landing = ghost != null && ghost.target == day && ghost.from != day
+                            val list = (if (landing) listOf(ghost!!.o) else emptyList()) + byDay[day].orEmpty()
                             val shown = if (list.size > lines) lines - 1 else list.size
                             Column(
                                 Modifier.weight(1f).fillMaxHeight().pressable(onClick = { onDay(day) }, onLongPress = { onLongDay(day) })
-                                    .border(0.5.dp, colors.rule).padding(horizontal = 2.dp, vertical = 1.dp)
+                                    .then(if (landing) Modifier.border(1.5.dp, colors.fg) else Modifier.border(0.5.dp, colors.rule)).padding(horizontal = 2.dp, vertical = 1.dp)
                             ) {
                                 Box(Modifier.then(if (isToday) Modifier.background(colors.fg) else Modifier).padding(horizontal = 3.dp)) {
                                     T(day.dayOfMonth.toString(), size = typo.small, color = if (isToday) colors.bg else if (inMonth) colors.fg else colors.rule, align = TextAlign.Start, maxLines = 1)
                                 }
-                                for (o in list.take(shown)) {
+                                for ((n, o) in list.take(shown).withIndex()) {
                                     val text = if (o.allDay || o.date != day || !withTime) o.title else Instant.ofEpochMilli(o.begin).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) + " " + o.title
-                                    T(text, size = lineSize, color = if (inMonth) colors.fg else colors.dim, align = TextAlign.Start, maxLines = 1, softWrap = false, lineHeightMul = 1.25f)
+                                    val lifted = ghost != null && ghost.o.key == o.key && !(landing && n == 0)
+                                    val gesture = if (onMove != null && !(landing && n == 0)) Modifier.dragAfterLongPress(
+                                        listOf(o, day, cellWPx, rowHPx),
+                                        onTap = { onDay(day) },
+                                        onStart = { tick(); drag = BoardDrag(o, day, day) },
+                                        onDrag = { off ->
+                                            val t = day.plusDays((off.x / cellWPx).roundToInt() + 7L * (off.y / rowHPx).roundToInt())
+                                            drag = drag?.copy(target = if (t < start) start else if (t > last) last else t)
+                                        },
+                                        onDrop = { released ->
+                                            val g = drag; drag = null
+                                            if (g != null && released && g.target != g.from && onMove(g.o, ChronoUnit.DAYS.between(g.from, g.target).toInt())) settled = g
+                                        }
+                                    ) else Modifier
+                                    T(text, Modifier.fillMaxWidth().then(gesture), size = lineSize, color = if (lifted) colors.rule else if (inMonth) colors.fg else colors.dim, align = TextAlign.Start, maxLines = 1, softWrap = false, lineHeightMul = 1.25f)
                                 }
                                 if (list.size > shown) T("+${list.size - shown}", size = lineSize, color = colors.dim, align = TextAlign.Start, maxLines = 1, lineHeightMul = 1.25f)
                             }
@@ -357,18 +432,21 @@ fun MonthScreen(nav: Nav, app: App, month: YearMonth) {
         }
     }
     var menu by remember { mutableStateOf(false) }
+    val mover = rememberMover(nav, app)
     fun go(m: YearMonth) { nav.stack[nav.stack.size - 1] = Screen.Month(m) }
     Page {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase(), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             Box(Modifier.weight(1f)) {
-                MonthBoard(month, settings.weekStartsMonday, occurrences, onDay = { nav.push(Screen.Day(it)) }, onLongDay = { nav.push(Screen.Edit(0L, it)) }, onSwipe = { go(month.plusMonths(it.toLong())) })
+                MonthBoard(month, settings.weekStartsMonday, occurrences, onDay = { nav.push(Screen.Day(it)) }, onLongDay = { nav.push(Screen.Edit(0L, it)) }, onSwipe = { go(month.plusMonths(it.toLong())) },
+                    onMove = { o, days -> mover.move(o, days, 0) })
             }
             Rule()
             TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))) }
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
         if (menu) ViewsMenu(nav, app, onDismiss = { menu = false }, first = listOf(MenuItem(stringResource(R.string.go_today)) { go(YearMonth.from(LocalDate.now())) }), newEventDate = if (month == YearMonth.from(LocalDate.now())) LocalDate.now() else month.atDay(1))
+        MoveConfirm(mover)
     }
 }
 
@@ -386,6 +464,7 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
     }
     fun go(d: LocalDate) { nav.stack[nav.stack.size - 1] = Screen.Day(d) }
     var menu by remember { mutableStateOf(false) }
+    val mover = rememberMover(nav, app)
     Page {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(dayLabel(date, LocalDate.now(), stringResource(R.string.today), stringResource(R.string.tomorrow)), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
@@ -393,13 +472,15 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
                 listOf(date), list, LocalDate.now(), Modifier.weight(1f), compact = false,
                 onEvent = { nav.push(Screen.Event(it.eventId)) },
                 onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
-                onSwipe = { go(date.plusDays(it.toLong())) }
+                onSwipe = { go(date.plusDays(it.toLong())) },
+                onMove = mover::move
             )
             Rule()
             TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, date)) }
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
         if (menu) ViewsMenu(nav, app, onDismiss = { menu = false }, first = if (date != LocalDate.now()) listOf(MenuItem(stringResource(R.string.go_today)) { go(LocalDate.now()) }) else emptyList(), newEventDate = date)
+        MoveConfirm(mover)
     }
 }
 
@@ -562,11 +643,14 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
     }
 }
 
-/** Time typed as text: "14:30", "1430", "9h15", "9" all work. */
+/**
+ * Time typed as text: "14:30", "1430", "9h15", "9" all work. The suggested time opens selected,
+ * so the first digit replaces it — no going back before the "2" of "21:00" to change it.
+ */
 @Composable
 fun TimePrompt(title: String, initial: LocalTime, onDone: (LocalTime) -> Unit, onCancel: () -> Unit) {
     var bad by remember { mutableStateOf(false) }
-    TextPrompt(title + (if (bad) "  (hh:mm)" else ""), initial.format(DateTimeFormatter.ofPattern("HH:mm")), keyboard = androidx.compose.ui.text.input.KeyboardType.Number, onDone = { text ->
+    TextPrompt(title + (if (bad) "  (hh:mm)" else ""), initial.format(DateTimeFormatter.ofPattern("HH:mm")), keyboard = androidx.compose.ui.text.input.KeyboardType.Number, selectAll = true, onDone = { text ->
         val m = Regex("^\\s*(\\d{1,2})\\s*[:hH.]?\\s*(\\d{2})?\\s*$").find(text)
         val h = m?.groupValues?.get(1)?.toIntOrNull(); val mi = m?.groupValues?.get(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 0
         if (m != null && h != null && h in 0..23 && mi in 0..59) onDone(LocalTime.of(h, mi)) else bad = true

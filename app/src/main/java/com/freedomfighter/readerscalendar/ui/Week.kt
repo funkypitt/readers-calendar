@@ -49,6 +49,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import java.time.DayOfWeek
@@ -90,6 +96,7 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) 
     val title = start.format(DateTimeFormatter.ofPattern("d MMM")).lowercase() + " – " + start.plusDays(6).format(DateTimeFormatter.ofPattern("d MMM yyyy")).lowercase()
     fun go(s: LocalDate) { nav.stack[nav.stack.size - 1] = Screen.Week(s, workdays) }
     var menu by remember { mutableStateOf(false) }
+    val mover = rememberMover(nav, app)
     Page {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(title, onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
@@ -99,7 +106,8 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) 
                 onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
                 onDay = { nav.push(Screen.Day(it)) },
                 onSwipe = { go(start.plusWeeks(it.toLong())) },
-                onWeekend = { nav.stack[nav.stack.size - 1] = Screen.Week(start, workdays = false) }
+                onWeekend = { nav.stack[nav.stack.size - 1] = Screen.Week(start, workdays = false) },
+                onMove = mover::move
             )
             Rule()
             TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, if (today in days) today else start)) }
@@ -110,11 +118,19 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) 
             first = listOf(MenuItem(stringResource(R.string.go_today)) { go(weekStart(today, if (workdays) true else settings.weekStartsMonday)) }),
             newEventDate = if (today in days) today else start
         )
+        MoveConfirm(mover)
     }
 }
 
 /** One event laid in a column: which of the [cols] side-by-side lanes it takes when events overlap. */
 private class Placed(val o: Occurrence, val startMin: Int, val endMin: Int, var lane: Int = 0, var lanes: Int = 1)
+
+/**
+ * A block being dragged — or just dropped, until the lists come back refreshed: the finger's
+ * total offset since the long press, where it pressed in the block, and the scroll at that
+ * moment (the content moves under a still finger when the grid scrolls at its edges).
+ */
+private data class GridDrag(val key: String, val day: LocalDate, val downY: Float, val blockTop: Float, val scrollAt: Int, val dx: Float = 0f, val dy: Float = 0f)
 
 /** Google-Calendar style lanes: overlapping events share the width of the column, side by side. */
 private fun placeLanes(events: List<Placed>): List<Placed> {
@@ -134,13 +150,16 @@ private fun placeLanes(events: List<Placed>): List<Placed> {
 /**
  * The time grid shared by the week (seven columns) and the day (one column). [compact] is the
  * portrait week, where columns are narrow and the text inside the blocks smaller. Tapping an
- * empty slot offers a new event at that hour.
+ * empty slot offers a new event at that hour. A long press on a block lifts it: it then
+ * follows the finger by quarter hours and whole columns, the grid scrolling when the finger
+ * nears its top or bottom, and [onMove] gets the day and minute shift on release (it answers
+ * whether the move is taken, so that a refused one snaps back).
  */
 @Composable
 fun TimeGrid(
     days: List<LocalDate>, occurrences: List<Occurrence>, today: LocalDate, modifier: Modifier, compact: Boolean, compactWeekend: Boolean = false,
     onEvent: (Occurrence) -> Unit, onSlot: (LocalDate, LocalTime) -> Unit, onDay: ((LocalDate) -> Unit)? = null, onSwipe: ((Int) -> Unit)? = null,
-    onWeekend: (() -> Unit)? = null
+    onWeekend: (() -> Unit)? = null, onMove: ((Occurrence, Int, Int) -> Boolean)? = null
 ) {
     // "Workdays": Monday to Friday take the width; Saturday and Sunday fold into a narrow strip on
     // the right that only says whether they hold something — tapping it opens the full week.
@@ -178,6 +197,15 @@ fun TimeGrid(
             onDragCancel = { dragged = 0f }
         ) { _, dx -> dragged += dx }
     } else Modifier
+    val tick = rememberTick()
+    var drag by remember { mutableStateOf<GridDrag?>(null) }
+    var settled by remember { mutableStateOf<GridDrag?>(null) }
+    LaunchedEffect(occurrences) { settled = null }
+    var viewportH by remember { mutableIntStateOf(0) }
+    var edge by remember { mutableIntStateOf(0) }
+    LaunchedEffect(edge) { while (edge != 0) { scroll.scrollBy(edge * 8f); delay(16) } }
+    val hourPx = with(density) { hourHeight.toPx() }
+    val edgePx = with(density) { 56.dp.toPx() }
     Column(modifier.fillMaxWidth().then(swipeMod)) {
         if (!single) Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(gutter).fillMaxHeight())
@@ -220,13 +248,14 @@ fun TimeGrid(
             if (compactWeekend) Box(Modifier.width(stripW))
         }
         Rule(Modifier.padding(top = 4.dp))
-        Row(Modifier.fillMaxWidth().verticalScroll(scroll).padding(end = if (single) 8.dp else arrowEnd)) {
+        Row(Modifier.fillMaxWidth().onSizeChanged { viewportH = it.height }.verticalScroll(scroll).padding(end = if (single) 8.dp else arrowEnd)) {
             Column(Modifier.width(gutter).height(hourHeight * 24 + 8.dp)) {
                 for (h in 0 until 24) Box(Modifier.height(hourHeight).fillMaxWidth(), contentAlignment = Alignment.TopEnd) {
                     Small("%02d".format(h), Modifier.padding(end = 6.dp).offset(y = (-7).dp), color = colors.dim, maxLines = 1, align = TextAlign.End)
                 }
             }
             for (d in shown) {
+                val idx = shown.indexOf(d)
                 val placed = remember(timed, d) {
                     placeLanes(timed.filter { it.date == d }.map { o ->
                         val s = Instant.ofEpochMilli(o.begin).atZone(zone).toLocalTime()
@@ -235,12 +264,14 @@ fun TimeGrid(
                         Placed(o, s.toSecondOfDay() / 60, maxOf(e.toSecondOfDay() / 60, s.toSecondOfDay() / 60 + 25))
                     })
                 }
+                val lifted = (drag ?: settled)?.day == d
                 BoxWithConstraints(
-                    Modifier.weight(weightOf(d)).height(hourHeight * 24 + 8.dp).pointerInput(d) {
+                    Modifier.weight(weightOf(d)).zIndex(if (lifted) 1f else 0f).height(hourHeight * 24 + 8.dp).pointerInput(d) {
                         detectTapGestures { pos -> onSlot(d, LocalTime.of(((pos.y / hourHeight.toPx()).toInt()).coerceIn(0, 23), 0)) }
                     }
                 ) {
                     val colW = maxWidth
+                    val colWPx = with(density) { colW.toPx() }
                     val rule = colors.rule
                     Canvas(Modifier.fillMaxSize()) {
                         val hh = hourHeight.toPx()
@@ -248,22 +279,53 @@ fun TimeGrid(
                         drawLine(rule, Offset(0f, 0f), Offset(0f, size.height), 1f)
                     }
                     for (p in placed) {
-                        val top = hourHeight * (p.startMin / 60f)
+                        // Where a lifted block sits: whole columns sideways, quarter hours up and down, inside the day.
+                        fun landing(g: GridDrag, contentDy: Float): Pair<Int, Int> {
+                            val daysShift = (g.dx / colWPx).roundToInt().coerceIn(-idx, shown.size - 1 - idx)
+                            val raw = contentDy / hourPx * 60
+                            val newStart = if (abs(raw) < 5) p.startMin else (((p.startMin + raw) / 15).roundToInt() * 15).coerceIn(0, 1440 - minOf(p.endMin - p.startMin, 1440))
+                            return daysShift to newStart
+                        }
+                        val ghost = (drag ?: settled)?.takeIf { it.key == p.o.key && it.day == d }
+                        val (shiftDays, newStart) = if (ghost == null) 0 to p.startMin else landing(ghost, ghost.dy + (if (ghost === drag) scroll.value - ghost.scrollAt else 0))
+                        val top = hourHeight * (newStart / 60f)
                         val h = hourHeight * ((p.endMin - p.startMin) / 60f)
                         val laneW = (colW - 4.dp) / p.lanes
                         val lineH = with(density) { (blockSize * 1.15f).toDp() }
                         val lines = ((h - 5.dp) / lineH).toInt().coerceAtLeast(1)
-                        val start = Instant.ofEpochMilli(p.o.begin).atZone(zone).toLocalTime()
-                        val showTime = !compact && lines >= 2
+                        val start = if (ghost == null) Instant.ofEpochMilli(p.o.begin).atZone(zone).toLocalTime() else LocalTime.ofSecondOfDay(newStart * 60L)
+                        val showTime = (!compact || ghost != null) && lines >= 2
                         // A lane too narrow for words: one clipped line beats a column of letters.
                         val wrap = laneW >= 44.dp
+                        val gesture = if (onMove != null) Modifier.dragAfterLongPress(
+                            listOf(p, colWPx, hourPx),
+                            onTap = { onEvent(p.o) },
+                            onStart = { pos -> tick(); edge = 0; drag = GridDrag(p.o.key, d, pos.y, hourPx * (p.startMin / 60f), scroll.value) },
+                            onDrag = { off ->
+                                val g = drag ?: return@dragAfterLongPress
+                                drag = g.copy(dx = off.x, dy = off.y)
+                                // the finger's place in the viewport: near an edge, the grid scrolls under it
+                                val fy = g.blockTop + g.downY + off.y - g.scrollAt
+                                edge = if (fy < edgePx) -1 else if (fy > viewportH - edgePx) 1 else 0
+                            },
+                            onDrop = { released ->
+                                val g = drag; drag = null; edge = 0
+                                if (g != null && released) {
+                                    val contentDy = g.dy + scroll.value - g.scrollAt
+                                    val (dd, ns) = landing(g, contentDy)
+                                    if ((dd != 0 || ns != p.startMin) && onMove(p.o, dd, ns - p.startMin)) settled = g.copy(dy = contentDy)
+                                }
+                            }
+                        ) else Modifier.noRippleClickable { onEvent(p.o) }
                         Column(
-                            Modifier.offset(x = 2.dp + laneW * p.lane, y = top).width(laneW).height(h).padding(end = if (p.lane < p.lanes - 1) 1.dp else 0.dp, bottom = 1.dp)
-                                .background(colors.fg).noRippleClickable { onEvent(p.o) }.padding(horizontal = 4.dp, vertical = 2.dp).clipToBounds()
+                            Modifier.offset(x = 2.dp + laneW * p.lane + colW * shiftDays, y = top).width(laneW).height(h).padding(end = if (p.lane < p.lanes - 1) 1.dp else 0.dp, bottom = 1.dp)
+                                .then(if (ghost != null) Modifier.zIndex(1f).border(1.dp, colors.bg) else Modifier)
+                                .background(colors.fg).then(gesture).padding(horizontal = 4.dp, vertical = 2.dp).clipToBounds()
                         ) {
                             T(p.o.title, size = blockSize, color = colors.bg, maxLines = if (showTime) lines - 1 else lines, align = TextAlign.Start, lineHeightMul = 1.15f, softWrap = wrap)
                             if (showTime) T(
-                                start.format(f) + (if (single && !p.o.location.isNullOrBlank()) " · " + p.o.location else ""),
+                                if (ghost != null) start.format(f) + " – " + LocalTime.ofSecondOfDay(((newStart + p.endMin - p.startMin) % 1440) * 60L).format(f)
+                                else start.format(f) + (if (single && !p.o.location.isNullOrBlank()) " · " + p.o.location else ""),
                                 size = blockSize, color = colors.bg.copy(alpha = 0.7f), maxLines = 1, align = TextAlign.Start, lineHeightMul = 1.15f, softWrap = false
                             )
                         }

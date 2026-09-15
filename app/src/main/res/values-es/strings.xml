@@ -20,6 +20,8 @@
     <string name="delete">eliminar</string>
     <string name="delete_confirm">¿eliminar este evento?</string>
     <string name="whole_series">(toda la serie)</string>
+    <string name="move_confirm">¿mover toda la serie?</string>
+    <string name="move">mover</string>
     <string name="save">guardar</string>
     <string name="title_prompt">título</string>
     <string name="all_day_setting">todo el día: %1$s</string>

@@ -168,4 +168,30 @@ class CalendarStore(private val context: Context) {
     }
 
     fun delete(id: Long) { cr.delete(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), null, null) }
+
+    /** Whether the event is a series (a rule or dates of its own), so that moving it moves every occurrence. */
+    fun repeats(id: Long): Boolean = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.RRULE, CalendarContract.Events.RDATE), null, null, null)?.use { c ->
+        c.moveToFirst() && (!c.getString(0).isNullOrBlank() || !c.getString(1).isNullOrBlank())
+    } ?: false
+
+    /**
+     * Moves an event by whole days and minutes — a drag in a grid — touching nothing else: the
+     * rule, the reminders, the description and the duration stay as they are. Wall-clock
+     * arithmetic, so a day across a time change keeps its hour.
+     */
+    fun shift(id: Long, days: Int, minutes: Int) {
+        val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id)
+        val row = cr.query(uri, arrayOf(CalendarContract.Events.DTSTART, CalendarContract.Events.DTEND, CalendarContract.Events.ALL_DAY), null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return
+            Triple(c.getLong(0), if (c.isNull(1)) null else c.getLong(1), c.getInt(2) == 1)
+        } ?: return
+        val (dtstart, dtend, allDay) = row
+        val zone = if (allDay) ZoneOffset.UTC else ZoneId.systemDefault()
+        fun moved(ms: Long) = Instant.ofEpochMilli(ms).atZone(zone).toLocalDateTime().plusDays(days.toLong()).plusMinutes(if (allDay) 0L else minutes.toLong()).atZone(zone).toInstant().toEpochMilli()
+        val v = ContentValues().apply {
+            put(CalendarContract.Events.DTSTART, moved(dtstart))
+            if (dtend != null) put(CalendarContract.Events.DTEND, moved(dtend))
+        }
+        cr.update(uri, v, null, null)
+    }
 }

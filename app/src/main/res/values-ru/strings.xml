@@ -20,6 +20,8 @@
     <string name="delete">удалить</string>
     <string name="delete_confirm">удалить это событие?</string>
     <string name="whole_series">(всю серию)</string>
+    <string name="move_confirm">перенести всю серию?</string>
+    <string name="move">перенести</string>
     <string name="save">сохранить</string>
     <string name="title_prompt">название</string>
     <string name="all_day_setting">весь день: %1$s</string>
