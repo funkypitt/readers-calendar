@@ -644,16 +644,66 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
 }
 
 /**
- * Time typed as text: "14:30", "1430", "9h15", "9" all work. The suggested time opens selected,
- * so the first digit replaces it — no going back before the "2" of "21:00" to change it.
+ * A time typed as digits around a ":" that is always there: "1830", "18.30", "18,30", "18h30",
+ * "9h15", "930" all read as hours and minutes. A separator typed by hand fixes where the hour
+ * ends; otherwise it is guessed ("18" → 18:, "9" → 9:, "230" → 2:30, "1830" → 18:30). Backspace
+ * over the ":" removes the hour's last digit, so the separator never goes away.
  */
+class TimeMask(initial: String) {
+    private var digits = initial.filter { it.isDigit() }.take(4)
+    /** The hour's length when the user typed a separator, else guessed. */
+    private var cut: Int? = null
+
+    private fun hourLen(): Int {
+        val d = digits
+        cut?.let { return minOf(it, d.length) }
+        return when (d.length) {
+            0, 1 -> d.length
+            2 -> if (d.toInt() <= 23) 2 else 1
+            3 -> if (d.drop(1).toInt() <= 59) 1 else 2
+            else -> 2
+        }
+    }
+
+    val text: String get() { val h = hourLen(); return digits.take(h) + ":" + digits.drop(h) }
+
+    /** What the field should show after a keystroke that left it as [typed]. */
+    fun apply(typed: String): String {
+        val nd = typed.filter { it.isDigit() }
+        val seps = typed.count { it in ":.,hH" }
+        if (nd == digits) {
+            if (seps == 0 && digits.isNotEmpty()) {          // the ":" was deleted: the hour loses a digit
+                val h = hourLen(); digits = digits.take(h - 1) + digits.drop(h); cut = null
+            } else if (seps > 1 && digits.isNotEmpty()) {   // a separator typed: the hour ends here
+                cut = minOf(digits.length, 2)
+            }
+        } else {
+            if (!nd.startsWith(digits)) cut = null              // replaced, not extended: guess again
+            digits = nd.take(cut?.plus(2) ?: 4)
+            if (cut != null && digits.length < cut!!) cut = null
+        }
+        return text
+    }
+
+    companion object {
+        /** The hour and minute of a masked text, or null. A lone minute digit is tens: 18:3 → 18:30. */
+        fun parse(text: String): LocalTime? {
+            val i = text.indexOf(':'); if (i < 0) return null
+            val h = text.substring(0, i).toIntOrNull() ?: return null
+            val ms = text.substring(i + 1)
+            val m = if (ms.isEmpty()) 0 else ms.padEnd(2, '0').toIntOrNull() ?: return null
+            return if (h in 0..23 && m in 0..59) LocalTime.of(h, m) else null
+        }
+    }
+}
+
+/** The time prompt: the suggested time opens selected (the first digit replaces it), the ":" stays whatever is typed. */
 @Composable
 fun TimePrompt(title: String, initial: LocalTime, onDone: (LocalTime) -> Unit, onCancel: () -> Unit) {
     var bad by remember { mutableStateOf(false) }
-    TextPrompt(title + (if (bad) "  (hh:mm)" else ""), initial.format(DateTimeFormatter.ofPattern("HH:mm")), keyboard = androidx.compose.ui.text.input.KeyboardType.Number, selectAll = true, onDone = { text ->
-        val m = Regex("^\\s*(\\d{1,2})\\s*[:hH.]?\\s*(\\d{2})?\\s*$").find(text)
-        val h = m?.groupValues?.get(1)?.toIntOrNull(); val mi = m?.groupValues?.get(2)?.takeIf { it.isNotEmpty() }?.toIntOrNull() ?: 0
-        if (m != null && h != null && h in 0..23 && mi in 0..59) onDone(LocalTime.of(h, mi)) else bad = true
+    val mask = remember(initial) { TimeMask(initial.format(DateTimeFormatter.ofPattern("HH:mm"))) }
+    TextPrompt(title + (if (bad) "  (hh:mm)" else ""), mask.text, keyboard = androidx.compose.ui.text.input.KeyboardType.Number, selectAll = true, normalize = mask::apply, onDone = { text ->
+        TimeMask.parse(text)?.let(onDone) ?: run { bad = true }
     }, onCancel = onCancel)
 }
 

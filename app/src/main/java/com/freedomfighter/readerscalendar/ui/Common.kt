@@ -248,6 +248,7 @@ fun TextPrompt(
     confirm: String = stringResource(R.string.action_ok),
     keyboard: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
     selectAll: Boolean = false,
+    normalize: ((String) -> String)? = null,
     onDone: (String) -> Unit,
     onCancel: () -> Unit
 ) {
@@ -278,7 +279,8 @@ fun TextPrompt(
             Small(title, Modifier.padding(horizontal = rowPadH).padding(top = 14.dp))
             ReaderTextField(
                 value = field,
-                onValueChange = { field = it },
+                // a normalised field (the time mask) rewrites what was typed and keeps the cursor at its end
+                onValueChange = { field = if (normalize == null) it else normalize(it.text).let { t -> TextFieldValue(t, TextRange(t.length)) } },
                 modifier = Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 10.dp).focusRequester(focus),
                 imeAction = ImeAction.Done,
                 onImeAction = { if (value.isNotBlank()) onDone(value.trim()) },
