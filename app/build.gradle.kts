@@ -13,8 +13,8 @@ android {
         applicationId = "com.freedomfighter.readerscalendar"
         minSdk = 26
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.10.1"
+        versionCode = 20
+        versionName = "1.10.2"
     }
 
     buildTypes { release { isMinifyEnabled = false } }
@@ -34,4 +34,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    testImplementation("junit:junit:4.13.2")
 }

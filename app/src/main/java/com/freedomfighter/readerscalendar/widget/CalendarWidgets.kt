@@ -1,6 +1,8 @@
 package com.freedomfighter.readerscalendar.widget
 
+import android.app.AlarmManager
 import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.appwidget.AppWidgetProvider
 import android.content.ContentUris
 import android.content.Context
@@ -47,7 +49,9 @@ object CalendarWidgets {
     fun renderLine(context: Context, mgr: AppWidgetManager, id: Int) {
         val views = RemoteViews(context.packageName, R.layout.widget_line)
         WidgetUi.paint(views, context, intArrayOf(R.id.widget_title, R.id.widget_plus), intArrayOf(R.id.widget_sub))
-        val first = upcoming(context, 1).firstOrNull()
+        val items = upcoming(context, 100)
+        val first = WidgetPick.line(items, System.currentTimeMillis())
+        schedule(context, items)
         if (first == null) {
             views.setTextViewText(R.id.widget_title, context.getString(R.string.nothing_planned))
             views.setTextViewText(R.id.widget_sub, context.getString(R.string.agenda))
@@ -65,6 +69,7 @@ object CalendarWidgets {
         val views = RemoteViews(context.packageName, R.layout.widget_list)
         WidgetUi.paint(views, context, intArrayOf(R.id.widget_plus), intArrayOf(R.id.widget_caption, R.id.widget_empty))
         views.setTextViewText(R.id.widget_caption, context.getString(R.string.agenda))
+        schedule(context, upcoming(context, 100))   // an event that ends leaves the list
         views.setTextViewText(R.id.widget_empty, context.getString(R.string.nothing_planned))
         val svc = Intent(context, ListService::class.java).putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id).apply { data = Uri.parse(toUri(Intent.URI_INTENT_SCHEME)) }
         views.setRemoteAdapter(R.id.widget_list, svc)
@@ -78,13 +83,40 @@ object CalendarWidgets {
     }
 
     fun refresh(context: Context) = WidgetUi.refresh(context, LineWidget::class.java, ListWidget::class.java)
+
+    const val ACTION_TICK = "com.freedomfighter.readerscalendar.widget.TICK"
+
+    /**
+     * Redraw the widgets when the shown event may change (an hour before an event, its start, its
+     * end). RTC, not RTC_WAKEUP: it never wakes a sleeping phone, it fires when the phone is awake.
+     * Exact when allowed (USE_EXACT_ALARM, granted to a calendar at install), because Android 14
+     * stretches a window alarm to ten minutes; otherwise that window.
+     */
+    fun schedule(context: Context, items: List<Occurrence>) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        val pi = WidgetUi.broadcast(context, Intent(ACTION_TICK).setComponent(ComponentName(context, LineWidget::class.java)), 9)
+        val at = WidgetPick.nextChange(items, System.currentTimeMillis())
+        if (at == null) { am.cancel(pi); return }
+        val exact = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S || am.canScheduleExactAlarms()
+        runCatching { if (exact) am.setExact(AlarmManager.RTC, at + 1_000L, pi) else am.setWindow(AlarmManager.RTC, at + 1_000L, 60_000L, pi) }
+    }
+
+    fun cancel(context: Context) {
+        val am = context.getSystemService(AlarmManager::class.java) ?: return
+        am.cancel(WidgetUi.broadcast(context, Intent(ACTION_TICK).setComponent(ComponentName(context, LineWidget::class.java)), 9))
+    }
 }
 
 class LineWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, mgr: AppWidgetManager, ids: IntArray) { ids.forEach { CalendarWidgets.renderLine(context, mgr, it) } }
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == Intent.ACTION_PROVIDER_CHANGED) CalendarWidgets.refresh(context)
+        when (intent.action) {
+            Intent.ACTION_PROVIDER_CHANGED, CalendarWidgets.ACTION_TICK, Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_DATE_CHANGED -> CalendarWidgets.refresh(context)
+        }
+    }
+    override fun onDisabled(context: Context) {
+        if (AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, ListWidget::class.java)).isEmpty()) CalendarWidgets.cancel(context)
     }
 }
 
