@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -515,16 +516,21 @@ fun EventScreen(nav: Nav, app: App, id: Long) {
                 if (cal != null) Small(cal.name + (if (cal.account.isNotBlank() && cal.account != cal.name) " · " + cal.account else ""), Modifier.padding(top = 14.dp), color = colors.dim)
             }
             val body: @Composable () -> Unit = {
-                if (e.location.isNotBlank()) { T(e.location, size = typo.title); Rule(Modifier.padding(vertical = 14.dp)) }
-                if (e.description.isNotBlank()) T(e.description, size = typo.title, lineHeightMul = 1.4f)
+                // the place and the notes are live text: a number dials, an address opens the map,
+                // a link opens the browser, and everything can be selected and copied
+                if (e.location.isNotBlank()) { LinkedText(e.location, size = typo.title, wholeAs = placeUri(e.location)); Rule(Modifier.padding(vertical = 14.dp)) }
+                if (e.description.isNotBlank()) LinkedText(e.description, size = typo.title, lineHeightMul = 1.4f)
                 if (e.location.isBlank() && e.description.isBlank()) Small("—", color = colors.rule)
             }
-            if (isLandscape()) Row(Modifier.weight(1f)) {
-                Column(Modifier.weight(0.45f).verticalScroll(rememberScrollState()).padding(horizontal = rowPadH, vertical = 20.dp)) { head() }
-                Box(Modifier.width(1.dp).fillMaxHeight().background(colors.rule))
-                Column(Modifier.weight(0.55f).verticalScroll(rememberScrollState()).padding(horizontal = rowPadH, vertical = 20.dp)) { body() }
-            } else Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = rowPadH, vertical = 20.dp)) {
-                head(); if (e.location.isNotBlank() || e.description.isNotBlank()) Rule(Modifier.padding(vertical = 14.dp)); body()
+            // long press anywhere on the page selects text to copy
+            SelectionContainer(Modifier.weight(1f)) {
+                if (isLandscape()) Row(Modifier.fillMaxSize()) {
+                    Column(Modifier.weight(0.45f).verticalScroll(rememberScrollState()).padding(horizontal = rowPadH, vertical = 20.dp)) { head() }
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(colors.rule))
+                    Column(Modifier.weight(0.55f).verticalScroll(rememberScrollState()).padding(horizontal = rowPadH, vertical = 20.dp)) { body() }
+                } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = rowPadH, vertical = 20.dp)) {
+                    head(); if (e.location.isNotBlank() || e.description.isNotBlank()) Rule(Modifier.padding(vertical = 14.dp)); body()
+                }
             }
             Rule()
             Row(Modifier.fillMaxWidth()) {

@@ -26,7 +26,10 @@ Nextcloud…) — so there is no server setup and nothing new to keep in sync.
 * The app opens on the week; settings › "opens on" switches that to the agenda, the workdays, the day or
   the month. The agenda stays one back away.
 * **Event**: title, when, repetition, reminder, then the calendar it belongs to as a quiet
-  line of text (no colour codes), location and description.
+  line of text (no colour codes), location and description. The page is live text: long-press
+  selects and copies any of it, a phone number opens the dialer with the number ready (never
+  dialled by itself), a mail address the mail app, a web address the browser, and the location
+  the map. Dates, room numbers and prices stay plain text.
 * **Edit / create**: title, all day, start and end (date from a month grid, time typed as
   text), calendar, reminder, repetition (daily, weekly, monthly, yearly), location, description.
 * **Calendars**: choose which ones are shown; pick the default one for new events.

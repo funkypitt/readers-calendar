@@ -85,4 +85,5 @@
     <string name="widget_list_name">Reader\'s Calendar · today and tomorrow</string>
     <string name="widget_line_desc">the next event, and + for a new one</string>
     <string name="widget_list_desc">today\'s and tomorrow\'s events, + for a new one</string>
+    <string name="no_app_for_this">no app for this on the phone</string>
 </resources>

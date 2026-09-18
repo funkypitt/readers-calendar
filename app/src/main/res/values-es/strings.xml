@@ -84,4 +84,5 @@
     <string name="widget_list_name">Reader\'s Calendar · hoy y mañana</string>
     <string name="widget_line_desc">el próximo evento, + para crear uno</string>
     <string name="widget_list_desc">los eventos de hoy y mañana, + para crear uno</string>
+    <string name="no_app_for_this">ninguna app para esto en el teléfono</string>
 </resources>
