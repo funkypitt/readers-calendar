@@ -85,4 +85,7 @@
     <string name="widget_line_desc">ближайшее событие, + для нового</string>
     <string name="widget_list_desc">события сегодня и завтра, + для нового</string>
     <string name="no_app_for_this">на телефоне нет приложения для этого</string>
+    <string name="scope_this">только это событие</string>
+    <string name="scope_following">это и следующие</string>
+    <string name="scope_series">всю серию</string>
 </resources>

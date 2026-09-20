@@ -64,8 +64,8 @@ class MainActivity : ComponentActivity() {
                     is Screen.Month -> MonthScreen(nav, app, s.month)
                     is Screen.Week -> com.freedomfighter.readerscalendar.ui.WeekScreen(nav, app, s.start, s.workdays)
                     is Screen.Day -> DayScreen(nav, app, s.date)
-                    is Screen.Event -> EventScreen(nav, app, s.id)
-                    is Screen.Edit -> EditScreen(nav, app, s.id, s.date, s.time)
+                    is Screen.Event -> EventScreen(nav, app, s.id, s.begin)
+                    is Screen.Edit -> EditScreen(nav, app, s.id, s.date, s.time, s.begin, s.scope)
                     Screen.Calendars -> CalendarsScreen(nav, app)
                     Screen.Settings -> SettingsScreen(nav, app)
                 }
@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
         val data = intent?.data
         when {
             intent?.action == Intent.ACTION_INSERT -> { nav.home(); nav.push(Screen.Edit(0L)) }
-            data != null && data.path?.startsWith("/events/") == true -> runCatching { ContentUris.parseId(data) }.getOrNull()?.let { nav.home(); nav.push(Screen.Event(it)) }
+            data != null && data.path?.startsWith("/events/") == true -> runCatching { ContentUris.parseId(data) }.getOrNull()?.let { nav.home(); nav.push(Screen.Event(it, intent.getLongExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, 0L))) }
             data != null && data.path?.startsWith("/time") == true -> {
                 val millis = data.lastPathSegment?.toLongOrNull()
                 val date = if (millis != null) Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate() else LocalDate.now()

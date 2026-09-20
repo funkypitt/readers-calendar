@@ -86,4 +86,7 @@
     <string name="widget_line_desc">the next event, and + for a new one</string>
     <string name="widget_list_desc">today\'s and tomorrow\'s events, + for a new one</string>
     <string name="no_app_for_this">no app for this on the phone</string>
+    <string name="scope_this">only this event</string>
+    <string name="scope_following">this and the following events</string>
+    <string name="scope_series">the whole series</string>
 </resources>

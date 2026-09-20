@@ -85,4 +85,7 @@
     <string name="widget_line_desc">el próximo evento, + para crear uno</string>
     <string name="widget_list_desc">los eventos de hoy y mañana, + para crear uno</string>
     <string name="no_app_for_this">ninguna app para esto en el teléfono</string>
+    <string name="scope_this">solo este evento</string>
+    <string name="scope_following">este y los siguientes</string>
+    <string name="scope_series">toda la serie</string>
 </resources>

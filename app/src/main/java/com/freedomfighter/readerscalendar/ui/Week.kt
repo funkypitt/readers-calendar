@@ -102,7 +102,7 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) 
             ScreenTitle(title, onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             TimeGrid(
                 days, occurrences, today, Modifier.weight(1f), compact = !isLandscape(), compactWeekend = workdays,
-                onEvent = { nav.push(Screen.Event(it.eventId)) },
+                onEvent = { nav.push(Screen.Event(it.eventId, it.begin)) },
                 onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
                 onDay = { nav.push(Screen.Day(it)) },
                 onSwipe = { go(start.plusWeeks(it.toLong())) },

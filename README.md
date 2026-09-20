@@ -22,6 +22,9 @@ words. No account or network of its own. In the family of
 * It answers the system's calendar links, so it can be the default calendar app, including
   for the launcher's agenda tile. Two home-screen widgets: next event, today and tomorrow.
 * White on black or black on white, serif / sans / mono, three text sizes. Six languages.
+* A repeating event asks what a change is for — only this event, this and the following ones, or
+  the whole series — when it is edited, dragged or deleted. Its rule (days of the week, an end) is
+  kept as the calendar holds it.
 
 More detail: [docs/NOTES.md](docs/NOTES.md).
 

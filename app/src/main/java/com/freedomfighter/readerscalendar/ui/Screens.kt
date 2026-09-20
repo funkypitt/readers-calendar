@@ -47,6 +47,7 @@ import com.freedomfighter.readerscalendar.data.Align
 import com.freedomfighter.readerscalendar.data.DefaultView
 import com.freedomfighter.readerscalendar.data.CalendarInfo
 import com.freedomfighter.readerscalendar.data.EventDetails
+import com.freedomfighter.readerscalendar.data.Scope
 import com.freedomfighter.readerscalendar.data.FontChoice
 import com.freedomfighter.readerscalendar.data.Occurrence
 import com.freedomfighter.readerscalendar.data.TextSize
@@ -79,9 +80,10 @@ sealed class Screen {
     data class Month(val month: YearMonth) : Screen()
     data class Week(val start: LocalDate, val workdays: Boolean = false) : Screen()
     data class Day(val date: LocalDate) : Screen()
-    data class Event(val id: Long) : Screen()
+    /** [begin]: the start of the occurrence that was tapped, 0 when it is not known. */
+    data class Event(val id: Long, val begin: Long = 0L) : Screen()
     /** id 0 = new event on [date], at [time] when it comes from a tap on the time grid. */
-    data class Edit(val id: Long, val date: LocalDate = LocalDate.now(), val time: LocalTime? = null) : Screen()
+    data class Edit(val id: Long, val date: LocalDate = LocalDate.now(), val time: LocalTime? = null, val begin: Long = 0L, val scope: Scope = Scope.SERIES) : Screen()
     data object Calendars : Screen()
     data object Settings : Screen()
 }
@@ -107,7 +109,7 @@ class Nav {
  * refused or cancelled move snaps back on the refresh.
  */
 class Mover(private val app: App, private val nav: Nav, private val scope: CoroutineScope) {
-    class Pending(val id: Long, val days: Int, val minutes: Int)
+    class Pending(val id: Long, val begin: Long, val days: Int, val minutes: Int)
     var pending by mutableStateOf<Pending?>(null)
         private set
     private var applied = false
@@ -116,11 +118,20 @@ class Mover(private val app: App, private val nav: Nav, private val scope: Corou
     fun move(o: Occurrence, days: Int, minutes: Int): Boolean {
         if (days == 0 && minutes == 0) return false
         if (app.calendars.calendars().firstOrNull { it.id == o.calendarId }?.writable != true) return false
-        if (app.calendars.repeats(o.eventId)) { applied = false; pending = Pending(o.eventId, days, minutes); return true }
+        if (app.calendars.repeats(o.eventId)) { applied = false; pending = Pending(o.eventId, o.begin, days, minutes); return true }
         apply(o.eventId, days, minutes); return true
     }
 
     fun apply(id: Long, days: Int, minutes: Int) { applied = true; runCatching { app.calendars.shift(id, days, minutes) }; nav.version++ }
+
+    /** One occurrence of a series, or the series from it on. */
+    fun apply(p: Pending, scope: Scope) {
+        applied = true
+        runCatching { if (scope == Scope.SERIES) app.calendars.shift(p.id, p.days, p.minutes) else app.calendars.shiftOccurrence(p.id, p.begin, p.days, p.minutes, scope) }
+        nav.version++
+    }
+
+    fun isFirst(p: Pending) = app.calendars.isFirst(p.id, p.begin)
 
     /** The sheet closed; unless a choice was made just after, the lists refresh and the block goes back. */
     fun dismiss() { pending = null; scope.launch { if (!applied) nav.version++ } }
@@ -129,11 +140,22 @@ class Mover(private val app: App, private val nav: Nav, private val scope: Corou
 @Composable
 fun rememberMover(nav: Nav, app: App): Mover { val scope = rememberCoroutineScope(); return remember { Mover(app, nav, scope) } }
 
-/** The "move the whole series?" sheet, when a dropped event repeats. */
+/**
+ * The question every calendar asks of a repeating event: only this one, this one and those after
+ * it, or all of them. On the first occurrence "from this one on" is the whole series, and is left out.
+ */
+@Composable
+fun scopeItems(first: Boolean, onChoice: (Scope) -> Unit): List<MenuItem> = buildList {
+    add(MenuItem(stringResource(R.string.scope_this)) { onChoice(Scope.THIS) })
+    if (!first) add(MenuItem(stringResource(R.string.scope_following)) { onChoice(Scope.FOLLOWING) })
+    add(MenuItem(stringResource(R.string.scope_series)) { onChoice(Scope.SERIES) })
+}
+
+/** The sheet shown when a dropped event repeats. */
 @Composable
 fun MoveConfirm(m: Mover) {
     val p = m.pending ?: return
-    TextMenu(title = stringResource(R.string.move_confirm), items = listOf(MenuItem(stringResource(R.string.move)) { m.apply(p.id, p.days, p.minutes) }), onDismiss = { m.dismiss() })
+    TextMenu(title = stringResource(R.string.move), items = scopeItems(m.isFirst(p)) { m.apply(p, it) }, onDismiss = { m.dismiss() })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -231,7 +253,7 @@ fun AgendaScreen(nav: Nav, app: App) {
                         Small(dayLabel(date, today, t1, t2), Modifier.padding(horizontal = rowPadH).padding(top = 18.dp, bottom = 2.dp).pressable(onClick = { nav.push(Screen.Day(date)) }, onLongPress = { nav.push(Screen.Edit(0L, date)) }),
                             color = if (date == today) colors.fg else colors.dim)
                     }
-                    items(list, key = { it.key }) { o -> OccurrenceRow(o, allDayText) { nav.push(Screen.Event(o.eventId)) } }
+                    items(list, key = { it.key }) { o -> OccurrenceRow(o, allDayText) { nav.push(Screen.Event(o.eventId, o.begin)) } }
                 }
                 item { TextRow(stringResource(R.string.more_days), size = typo.small) { days += 60 } }
             }
@@ -471,7 +493,7 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
             ScreenTitle(dayLabel(date, LocalDate.now(), stringResource(R.string.today), stringResource(R.string.tomorrow)), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             TimeGrid(
                 listOf(date), list, LocalDate.now(), Modifier.weight(1f), compact = false,
-                onEvent = { nav.push(Screen.Event(it.eventId)) },
+                onEvent = { nav.push(Screen.Event(it.eventId, it.begin)) },
                 onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
                 onSwipe = { go(date.plusDays(it.toLong())) },
                 onMove = mover::move
@@ -490,13 +512,17 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-fun EventScreen(nav: Nav, app: App, id: Long) {
+fun EventScreen(nav: Nav, app: App, id: Long, begin: Long = 0L) {
     val typo = LocalTypo.current
     val colors = LocalColors.current
     BackHandler { nav.pop() }
-    val event by produceState<EventDetails?>(null, id, nav.version) { value = withContext(Dispatchers.IO) { app.calendars.event(id) } }
+    val event by produceState<EventDetails?>(null, id, nav.version) { value = withContext(Dispatchers.IO) { app.calendars.event(id, begin) } }
     val calendars by produceState<List<CalendarInfo>>(emptyList()) { value = withContext(Dispatchers.IO) { app.calendars.calendars() } }
     var confirmDelete by remember { mutableStateOf(false) }
+    var askEdit by remember { mutableStateOf(false) }
+    // one occurrence of a series, whose start is known: a change asks what it is for
+    val occurrence = begin > 0L && event?.repeat?.isNotEmpty() == true
+    val first = remember(id, begin, occurrence) { occurrence && app.calendars.isFirst(id, begin) }
     val f = timeFmt()
     Page {
         Column(Modifier.fillMaxSize()) {
@@ -522,8 +548,10 @@ fun EventScreen(nav: Nav, app: App, id: Long) {
                 if (e.description.isNotBlank()) LinkedText(e.description, size = typo.title, lineHeightMul = 1.4f)
                 if (e.location.isBlank() && e.description.isBlank()) Small("—", color = colors.rule)
             }
-            // long press anywhere on the page selects text to copy
-            SelectionContainer(Modifier.weight(1f)) {
+            // long press anywhere on the page selects text to copy. The weight is on a box of the
+            // column, not on the selection container: given to the container it was ignored, the
+            // page took the whole height and the edit / delete row under it was pushed off the screen.
+            Box(Modifier.weight(1f)) { SelectionContainer {
                 if (isLandscape()) Row(Modifier.fillMaxSize()) {
                     Column(Modifier.weight(0.45f).verticalScroll(rememberScrollState()).padding(horizontal = rowPadH, vertical = 20.dp)) { head() }
                     Box(Modifier.width(1.dp).fillMaxHeight().background(colors.rule))
@@ -531,15 +559,20 @@ fun EventScreen(nav: Nav, app: App, id: Long) {
                 } else Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = rowPadH, vertical = 20.dp)) {
                     head(); if (e.location.isNotBlank() || e.description.isNotBlank()) Rule(Modifier.padding(vertical = 14.dp)); body()
                 }
-            }
+            } }
             Rule()
             Row(Modifier.fillMaxWidth()) {
-                Box(Modifier.weight(1f)) { TextRow(stringResource(R.string.edit), size = typo.title) { nav.push(Screen.Edit(id)) } }
+                Box(Modifier.weight(1f)) { TextRow(stringResource(R.string.edit), size = typo.title) { if (occurrence) askEdit = true else nav.push(Screen.Edit(id)) } }
                 Box(Modifier.weight(1f)) { TextRow(stringResource(R.string.delete), size = typo.title) { confirmDelete = true } }
             }
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
-        if (confirmDelete) TextMenu(
+        if (askEdit) TextMenu(title = stringResource(R.string.edit), items = scopeItems(first) { nav.push(Screen.Edit(id, begin = begin, scope = it)) }, onDismiss = { askEdit = false })
+        if (confirmDelete && occurrence) TextMenu(
+            title = stringResource(R.string.delete),
+            items = scopeItems(first) { if (it == Scope.SERIES) app.calendars.delete(id) else app.calendars.deleteOccurrence(id, begin, it); nav.version++; nav.pop() },
+            onDismiss = { confirmDelete = false }
+        ) else if (confirmDelete) TextMenu(
             title = stringResource(R.string.delete_confirm) + (if (event?.repeat?.isNotEmpty() == true) " " + stringResource(R.string.whole_series) else ""),
             items = listOf(MenuItem(stringResource(R.string.delete)) { app.calendars.delete(id); nav.version++; nav.pop() }),
             onDismiss = { confirmDelete = false }
@@ -566,7 +599,7 @@ fun reminderLabel(m: Int?): String = when (m) {
 // ---------------------------------------------------------------------------------------------
 
 @Composable
-fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? = null) {
+fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? = null, begin: Long = 0L, scope: Scope = Scope.SERIES) {
     val context = LocalContext.current
     val settings by app.prefs.settings.collectAsState()
     val typo = LocalTypo.current
@@ -577,7 +610,8 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
     var loaded by remember { mutableStateOf(id == 0L) }
     val nextHour = time ?: LocalTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0)
     var e by remember { mutableStateOf(EventDetails(calendarId = settings.defaultCalendar, start = LocalDateTime.of(date, nextHour), end = LocalDateTime.of(date, nextHour).plusHours(1), reminderMinutes = settings.defaultReminderMinutes.takeIf { it >= 0 })) }
-    LaunchedEffect(id) { if (id != 0L) { withContext(Dispatchers.IO) { app.calendars.event(id) }?.let { e = it }; loaded = true } }
+    // one occurrence, or the series from it on: the form opens on THAT day; the whole series, on the day it began
+    LaunchedEffect(id) { if (id != 0L) { withContext(Dispatchers.IO) { app.calendars.event(id, if (scope == Scope.SERIES) 0L else begin) }?.let { e = it }; loaded = true } }
     LaunchedEffect(calendars) { if (e.calendarId == 0L || calendars.none { it.id == e.calendarId }) calendars.firstOrNull()?.let { e = e.copy(calendarId = it.id) } }
     var prompt by remember { mutableStateOf<String?>(null) }      // "title" | "location" | "description" | "startTime" | "endTime"
     var datePick by remember { mutableStateOf<String?>(null) }    // "start" | "end"
@@ -590,6 +624,11 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
         if (e.title.isBlank()) { prompt = "title"; return }
         if (!e.end.isAfter(e.start) && !e.allDay) { error = context.getString(R.string.end_before_start); return }
         if (e.allDay && e.end.toLocalDate().isBefore(e.start.toLocalDate())) { error = context.getString(R.string.end_before_start); return }
+        if (id != 0L && scope != Scope.SERIES && begin > 0L) {
+            // the page behind showed the occurrence as it was: back to the list it came from
+            runCatching { app.calendars.saveOccurrence(e, begin, scope) }.onSuccess { nav.version++; nav.pop(); nav.pop() }.onFailure { error = it.message ?: "error" }
+            return
+        }
         runCatching { app.calendars.save(e) }.onSuccess { nav.version++; nav.pop(); if (id == 0L) { nav.push(Screen.Event(it)) } }
             .onFailure { error = it.message ?: "error" }
     }

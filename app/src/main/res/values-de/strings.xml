@@ -85,4 +85,7 @@
     <string name="widget_line_desc">der nächste Termin, + für einen neuen</string>
     <string name="widget_list_desc">die Termine von heute und morgen, + für einen neuen</string>
     <string name="no_app_for_this">keine App dafür auf dem Telefon</string>
+    <string name="scope_this">nur diesen Termin</string>
+    <string name="scope_following">diesen und die folgenden</string>
+    <string name="scope_series">die ganze Serie</string>
 </resources>

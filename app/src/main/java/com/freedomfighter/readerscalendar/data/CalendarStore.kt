@@ -43,9 +43,15 @@ data class EventDetails(
     val description: String = "",
     /** Minutes before the start; null = no reminder. */
     val reminderMinutes: Int? = null,
-    /** "", "DAILY", "WEEKLY", "MONTHLY", "YEARLY". */
-    val repeat: String = ""
+    /** "", "DAILY", "WEEKLY", "MONTHLY", "YEARLY", "OTHER". */
+    val repeat: String = "",
+    /** The rule as the calendar holds it (days of the week, an end, an interval…): written back
+     *  untouched unless [repeat] was changed in the form. */
+    val rrule: String = ""
 )
+
+/** What a change to one occurrence of a series is for. */
+enum class Scope { THIS, FOLLOWING, SERIES }
 
 /**
  * The phone's own calendars through CalendarContract: what the accounts sync (Google, kSync,
@@ -88,7 +94,19 @@ class CalendarStore(private val context: Context) {
         return out.sortedWith(compareBy({ it.begin }, { !it.allDay }))
     }
 
-    fun event(id: Long): EventDetails? {
+    /**
+     * [begin]: the start of the occurrence that was tapped. A series then answers with THAT
+     * occurrence's day and hours, not with the day the series began.
+     */
+    fun event(id: Long, begin: Long = 0L): EventDetails? {
+        val e = master(id) ?: return null
+        if (begin <= 0L || e.repeat.isEmpty()) return e
+        val zone: ZoneId = if (e.allDay) ZoneOffset.UTC else ZoneId.systemDefault()
+        val start = Instant.ofEpochMilli(begin).atZone(zone).toLocalDateTime()
+        return e.copy(start = start, end = start.plus(java.time.Duration.between(e.start, e.end)))
+    }
+
+    private fun master(id: Long): EventDetails? {
         if (!hasPermission()) return null
         val proj = arrayOf(CalendarContract.Events.CALENDAR_ID, CalendarContract.Events.TITLE, CalendarContract.Events.ALL_DAY, CalendarContract.Events.DTSTART,
             CalendarContract.Events.DTEND, CalendarContract.Events.EVENT_LOCATION, CalendarContract.Events.DESCRIPTION, CalendarContract.Events.RRULE, CalendarContract.Events.DURATION)
@@ -101,7 +119,7 @@ class CalendarStore(private val context: Context) {
             if (dtend == 0L) dtend = dtstart + parseDuration(c.getString(8))
             val start = if (allDay) Instant.ofEpochMilli(dtstart).atZone(ZoneOffset.UTC).toLocalDateTime() else Instant.ofEpochMilli(dtstart).atZone(zone).toLocalDateTime()
             val end = if (allDay) Instant.ofEpochMilli(dtend).atZone(ZoneOffset.UTC).toLocalDateTime().minusDays(1) else Instant.ofEpochMilli(dtend).atZone(zone).toLocalDateTime()
-            EventDetails(id, c.getLong(0), c.getString(1) ?: "", allDay, start, end, c.getString(5) ?: "", c.getString(6) ?: "", null, repeatOf(c.getString(7)))
+            EventDetails(id, c.getLong(0), c.getString(1) ?: "", allDay, start, end, c.getString(5) ?: "", c.getString(6) ?: "", null, repeatOf(c.getString(7)), c.getString(7) ?: "")
         } ?: return null
         val reminder = cr.query(CalendarContract.Reminders.CONTENT_URI, arrayOf(CalendarContract.Reminders.MINUTES), "${CalendarContract.Reminders.EVENT_ID}=?", arrayOf(id.toString()), null)?.use { c ->
             if (c.moveToFirst()) c.getInt(0) else null
@@ -126,7 +144,7 @@ class CalendarStore(private val context: Context) {
     }
 
     /** Insert or update; returns the event id. A repeating event is written as a whole series. */
-    fun save(e: EventDetails): Long {
+    fun save(e: EventDetails, exdate: String? = null): Long {
         val zone = ZoneId.systemDefault()
         val v = ContentValues().apply {
             put(CalendarContract.Events.CALENDAR_ID, e.calendarId)
@@ -139,19 +157,22 @@ class CalendarStore(private val context: Context) {
                 val s = e.start.toLocalDate().atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
                 val en = e.end.toLocalDate().plusDays(1).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
                 put(CalendarContract.Events.DTSTART, s)
-                if (e.repeat.isEmpty() || e.repeat == "OTHER") { put(CalendarContract.Events.DTEND, en); putNull(CalendarContract.Events.DURATION) }
+                if (e.repeat.isEmpty()) { put(CalendarContract.Events.DTEND, en); putNull(CalendarContract.Events.DURATION) }
                 else { putNull(CalendarContract.Events.DTEND); put(CalendarContract.Events.DURATION, "P${((en - s) / 86400_000L).coerceAtLeast(1)}D") }
             } else {
                 put(CalendarContract.Events.EVENT_TIMEZONE, zone.id)
                 val s = e.start.atZone(zone).toInstant().toEpochMilli()
                 val en = e.end.atZone(zone).toInstant().toEpochMilli()
                 put(CalendarContract.Events.DTSTART, s)
-                if (e.repeat.isEmpty() || e.repeat == "OTHER") { put(CalendarContract.Events.DTEND, en); putNull(CalendarContract.Events.DURATION) }
+                if (e.repeat.isEmpty()) { put(CalendarContract.Events.DTEND, en); putNull(CalendarContract.Events.DURATION) }
                 else { putNull(CalendarContract.Events.DTEND); put(CalendarContract.Events.DURATION, "PT${((en - s) / 60_000L).coerceAtLeast(1)}M") }
             }
-            if (e.repeat.isNotEmpty() && e.repeat != "OTHER") put(CalendarContract.Events.RRULE, "FREQ=${e.repeat}")
-            else if (e.repeat.isEmpty()) putNull(CalendarContract.Events.RRULE)
+            // The rule the calendar holds says more than the form shows ("every Tuesday and Thursday
+            // until June"): it is written back as it is, unless the repetition itself was changed.
+            if (e.repeat.isEmpty()) putNull(CalendarContract.Events.RRULE)
+            else if (e.repeat != "OTHER") put(CalendarContract.Events.RRULE, if (repeatOf(e.rrule) == e.repeat) e.rrule else "FREQ=${e.repeat}")
             put(CalendarContract.Events.HAS_ALARM, if (e.reminderMinutes != null) 1 else 0)
+            if (exdate != null) put(CalendarContract.Events.EXDATE, exdate)
         }
         val id = if (e.id == 0L) {
             ContentUris.parseId(cr.insert(CalendarContract.Events.CONTENT_URI, v) ?: throw IllegalStateException("insert failed"))
@@ -166,6 +187,125 @@ class CalendarStore(private val context: Context) {
         }
         return id
     }
+
+    // ---- one occurrence of a series, or the series from one occurrence on ------------------------
+    // One occurrence goes through the provider's exception address: given the occurrence's
+    // original start, it writes the exception the sync adapters expect (the end is never given:
+    // the provider works it out of DURATION). "From this one on" is done here rather than left
+    // to the provider, whose own split fails on some versions: the new series is written first,
+    // then the old one is ended just before it — a failure leaves an event too many, not a hole.
+
+    private fun exceptionValues(e: EventDetails, begin: Long): ContentValues = ContentValues().apply {
+        val zone: ZoneId = if (e.allDay) ZoneOffset.UTC else ZoneId.systemDefault()
+        val s = (if (e.allDay) e.start.toLocalDate().atStartOfDay() else e.start).atZone(zone).toInstant().toEpochMilli()
+        val en = (if (e.allDay) e.end.toLocalDate().plusDays(1).atStartOfDay() else e.end).atZone(zone).toInstant().toEpochMilli()
+        put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, begin)
+        put(CalendarContract.Events.TITLE, e.title.trim())
+        put(CalendarContract.Events.EVENT_LOCATION, e.location.trim())
+        put(CalendarContract.Events.DESCRIPTION, e.description.trim())
+        put(CalendarContract.Events.DTSTART, s)
+        put(CalendarContract.Events.EVENT_TIMEZONE, if (e.allDay) "UTC" else zone.id)
+        put(CalendarContract.Events.DURATION, if (e.allDay) "P${((en - s) / 86400_000L).coerceAtLeast(1)}D" else "PT${((en - s) / 60_000L).coerceAtLeast(1)}M")
+        put(CalendarContract.Events.HAS_ALARM, if (e.reminderMinutes != null) 1 else 0)
+    }
+
+    /** The rule of a series that starts at [begin]: a COUNT loses the occurrences before, and a
+     *  weekly rule naming one day follows the occurrence to its new day. */
+    private fun ruleForTheRest(e: EventDetails, begin: Long): String {
+        var rule = if (repeatOf(e.rrule) == e.repeat && e.rrule.isNotBlank()) e.rrule else "FREQ=${e.repeat}"
+        Regex("COUNT=(\\d+)", RegexOption.IGNORE_CASE).find(rule)?.let { m ->
+            val before = occurrencesBefore(e.id, begin)
+            rule = rule.replaceRange(m.range, "COUNT=${(m.groupValues[1].toInt() - before).coerceAtLeast(1)}")
+        }
+        Regex("BYDAY=([A-Z]{2})(?=;|$)").find(rule)?.let { m ->
+            if ("FREQ=WEEKLY" in rule) rule = rule.replaceRange(m.range, "BYDAY=" + e.start.dayOfWeek.name.take(2))
+        }
+        return rule
+    }
+
+    private fun occurrencesBefore(id: Long, begin: Long): Int {
+        val first = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.DTSTART), null, null, null)?.use { c -> if (c.moveToFirst()) c.getLong(0) else null } ?: return 0
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also { ContentUris.appendId(it, first); ContentUris.appendId(it, begin - 1) }.build()
+        val shown = cr.query(uri, arrayOf(CalendarContract.Instances.BEGIN), "${CalendarContract.Instances.EVENT_ID}=?", arrayOf(id.toString()), null)?.use { c ->
+            var n = 0; while (c.moveToNext()) if (c.getLong(0) < begin) n++; n
+        } ?: 0
+        // an occurrence changed or deleted on its own is no longer an instance of the series, but
+        // the rule still counts it
+        val changed = cr.query(CalendarContract.Events.CONTENT_URI, arrayOf(CalendarContract.Events._ID),
+            "${CalendarContract.Events.ORIGINAL_ID}=? AND ${CalendarContract.Events.ORIGINAL_INSTANCE_TIME}<?", arrayOf(id.toString(), begin.toString()), null)?.use { it.count } ?: 0
+        return shown + changed
+    }
+
+    /** [e] as the form holds it, for the occurrence that began at [begin] — alone, or from it on. Returns the new event. */
+    fun saveOccurrence(e: EventDetails, begin: Long, scope: Scope): Long {
+        if (scope == Scope.FOLLOWING) {
+            val rest = ruleForTheRest(e, begin)
+            val id = save(e.copy(id = 0L, rrule = rest, repeat = repeatOf(rest)))
+            endBefore(e.id, begin)
+            return id
+        }
+        if (neverSynced(e.id)) {
+            val id = save(e.copy(id = 0L, repeat = "", rrule = ""))
+            skip(e.id, begin)
+            return id
+        }
+        val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, e.id)
+        val id = ContentUris.parseId(cr.insert(uri, exceptionValues(e, begin)) ?: throw IllegalStateException("insert failed"))
+        cr.delete(CalendarContract.Reminders.CONTENT_URI, "${CalendarContract.Reminders.EVENT_ID}=?", arrayOf(id.toString()))
+        e.reminderMinutes?.let { m ->
+            cr.insert(CalendarContract.Reminders.CONTENT_URI, ContentValues().apply {
+                put(CalendarContract.Reminders.EVENT_ID, id); put(CalendarContract.Reminders.MINUTES, m); put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
+            })
+        }
+        return id
+    }
+
+    /** The occurrence that began at [begin] moved by whole days and minutes — alone, or with those after it. */
+    fun shiftOccurrence(id: Long, begin: Long, days: Int, minutes: Int, scope: Scope) {
+        val e = event(id, begin) ?: return
+        val m = if (e.allDay) 0L else minutes.toLong()
+        saveOccurrence(e.copy(start = e.start.plusDays(days.toLong()).plusMinutes(m), end = e.end.plusDays(days.toLong()).plusMinutes(m)), begin, scope)
+    }
+
+    /** Only the occurrence that began at [begin], or that one and every one after it. */
+    fun deleteOccurrence(id: Long, begin: Long, scope: Scope) {
+        if (scope == Scope.THIS && neverSynced(id)) { skip(id, begin); return }
+        if (scope == Scope.THIS) {
+            cr.insert(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, id), ContentValues().apply {
+                put(CalendarContract.Events.ORIGINAL_INSTANCE_TIME, begin)
+                put(CalendarContract.Events.STATUS, CalendarContract.Events.STATUS_CANCELED)
+            })
+            return
+        }
+        endBefore(id, begin)
+    }
+
+    /** The series ends just before the occurrence that began at [begin]: UNTIL replaces whatever ended it. */
+    private fun endBefore(id: Long, begin: Long) {
+        val e = master(id) ?: return
+        val until = if (e.allDay) Instant.ofEpochMilli(begin).atZone(ZoneOffset.UTC).toLocalDate().minusDays(1).format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE)
+        else Instant.ofEpochMilli(begin - 1000).atZone(ZoneOffset.UTC).format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'"))
+        val rule = e.rrule.split(";").filter { it.isNotBlank() && !it.startsWith("UNTIL=", true) && !it.startsWith("COUNT=", true) }.joinToString(";") + ";UNTIL=$until"
+        save(e.copy(rrule = rule))     // the whole row, as every other change of a series is written
+    }
+
+    /**
+     * A series no server knows (a calendar kept on the phone only, or an event not sent yet). The
+     * provider ties an exception to its series by the server's id: without one, writing an
+     * exception makes every other occurrence of the series vanish. Such a series skips the date
+     * instead (EXDATE), and the changed occurrence becomes an event of its own.
+     */
+    private fun neverSynced(id: Long): Boolean = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events._SYNC_ID), null, null, null)?.use { c -> c.moveToFirst() && c.getString(0).isNullOrBlank() } ?: false
+
+    private fun skip(id: Long, begin: Long) {
+        val e = master(id) ?: return
+        val had = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.EXDATE), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        val stamp = Instant.ofEpochMilli(begin).atZone(ZoneOffset.UTC).format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'"))
+        save(e, exdate = listOfNotNull(had?.takeIf { it.isNotBlank() }, stamp).joinToString(","))
+    }
+
+    /** Whether [begin] is the very first occurrence: "from this one on" is then the whole series. */
+    fun isFirst(id: Long, begin: Long): Boolean = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.DTSTART), null, null, null)?.use { c -> c.moveToFirst() && c.getLong(0) == begin } ?: false
 
     fun delete(id: Long) { cr.delete(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), null, null) }
 
