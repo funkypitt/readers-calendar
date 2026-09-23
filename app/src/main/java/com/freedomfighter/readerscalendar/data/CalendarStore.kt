@@ -63,12 +63,28 @@ class CalendarStore(private val context: Context) {
     fun hasPermission() = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED &&
         ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
+    /** The account a calendar belongs to, with the service it syncs through: two "family"
+     *  calendars — one at Google, one synced by DAVx⁵ — must not be taken for each other, even
+     *  when both accounts carry the same address. */
+    private fun accountLabel(name: String, type: String): String {
+        val service = when (type) {
+            "com.google" -> "Google"
+            "bitfire.at.davdroid", "at.bitfire.davdroid" -> "DAVx⁵"
+            "org.dmfs.caldav.account" -> "CalDAV-Sync"
+            "", CalendarContract.ACCOUNT_TYPE_LOCAL -> ""
+            // another sync app: its own name, read out of the account type ("com.example.sync" → Example)
+            else -> type.split('.').filter { it.lowercase() !in setOf("com", "org", "net", "ch", "at", "de", "fr", "io", "app", "android", "account", "accounts", "sync", "calendar", "caldav") }
+                .maxByOrNull { it.length }?.replaceFirstChar { it.uppercase() } ?: ""
+        }
+        return listOf(name, service).filter { it.isNotBlank() && it != CalendarContract.ACCOUNT_TYPE_LOCAL }.joinToString(" · ")
+    }
+
     fun calendars(): List<CalendarInfo> {
         if (!hasPermission()) return emptyList()
         val out = ArrayList<CalendarInfo>()
-        val proj = arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, CalendarContract.Calendars.ACCOUNT_NAME, CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL)
+        val proj = arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, CalendarContract.Calendars.ACCOUNT_NAME, CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, CalendarContract.Calendars.ACCOUNT_TYPE)
         cr.query(CalendarContract.Calendars.CONTENT_URI, proj, "${CalendarContract.Calendars.VISIBLE}=1", null, "${CalendarContract.Calendars.ACCOUNT_NAME},${CalendarContract.Calendars.CALENDAR_DISPLAY_NAME}")?.use { c ->
-            while (c.moveToNext()) out += CalendarInfo(c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getInt(3) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR)
+            while (c.moveToNext()) out += CalendarInfo(c.getLong(0), c.getString(1) ?: "", accountLabel(c.getString(2) ?: "", c.getString(4) ?: ""), c.getInt(3) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR)
         }
         return out
     }
@@ -185,6 +201,19 @@ class CalendarStore(private val context: Context) {
                 put(CalendarContract.Reminders.EVENT_ID, id); put(CalendarContract.Reminders.MINUTES, m); put(CalendarContract.Reminders.METHOD, CalendarContract.Reminders.METHOD_ALERT)
             })
         }
+        return id
+    }
+
+    /** An event taken to another calendar. The provider would let CALENDAR_ID be rewritten, but a
+     *  sync adapter (Google, DAVx5) files an event under the calendar it came from and would leave
+     *  it there on the server: it is written anew in the other calendar — with the dates its series
+     *  skips — and only then deleted from the first, so that a failure leaves one too many, not a
+     *  hole. Occurrences changed one by one stay behind with the old series and go with it. */
+    fun moveToCalendar(e: EventDetails): Long {
+        val old = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.id)
+        val exdate = cr.query(old, arrayOf(CalendarContract.Events.EXDATE), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null }
+        val id = save(e.copy(id = 0L), exdate?.takeIf { it.isNotBlank() && e.repeat.isNotEmpty() })
+        cr.delete(old, null, null)
         return id
     }
 

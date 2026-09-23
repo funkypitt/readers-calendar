@@ -539,7 +539,7 @@ fun EventScreen(nav: Nav, app: App, id: Long, begin: Long = 0L) {
                 if (e.repeat.isNotEmpty()) Small(repeatLabel(e.repeat), Modifier.padding(top = 4.dp))
                 e.reminderMinutes?.let { Small(reminderLabel(it), Modifier.padding(top = 2.dp)) }
                 // The calendar the event belongs to: a quiet line of text, never a colour.
-                if (cal != null) Small(cal.name + (if (cal.account.isNotBlank() && cal.account != cal.name) " · " + cal.account else ""), Modifier.padding(top = 14.dp), color = colors.dim)
+                if (cal != null) Small(cal.name + (if (cal.account.isNotBlank()) " · " + cal.account else ""), Modifier.padding(top = 14.dp), color = colors.dim)
             }
             val body: @Composable () -> Unit = {
                 // the place and the notes are live text: a number dials, an address opens the map,
@@ -611,7 +611,10 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
     val nextHour = time ?: LocalTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0)
     var e by remember { mutableStateOf(EventDetails(calendarId = settings.defaultCalendar, start = LocalDateTime.of(date, nextHour), end = LocalDateTime.of(date, nextHour).plusHours(1), reminderMinutes = settings.defaultReminderMinutes.takeIf { it >= 0 })) }
     // one occurrence, or the series from it on: the form opens on THAT day; the whole series, on the day it began
-    LaunchedEffect(id) { if (id != 0L) { withContext(Dispatchers.IO) { app.calendars.event(id, if (scope == Scope.SERIES) 0L else begin) }?.let { e = it }; loaded = true } }
+    var fromCalendar by remember { mutableStateOf(0L) }          // the calendar the event is in now
+    LaunchedEffect(id) { if (id != 0L) { withContext(Dispatchers.IO) { app.calendars.event(id, if (scope == Scope.SERIES) 0L else begin) }?.let { e = it; fromCalendar = it.calendarId }; loaded = true } }
+    // one occurrence alone stays with its series, in the series' calendar
+    val calendarFixed = id != 0L && scope == Scope.THIS && begin > 0L
     LaunchedEffect(calendars) { if (e.calendarId == 0L || calendars.none { it.id == e.calendarId }) calendars.firstOrNull()?.let { e = e.copy(calendarId = it.id) } }
     var prompt by remember { mutableStateOf<String?>(null) }      // "title" | "location" | "description" | "startTime" | "endTime"
     var datePick by remember { mutableStateOf<String?>(null) }    // "start" | "end"
@@ -627,6 +630,11 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
         if (id != 0L && scope != Scope.SERIES && begin > 0L) {
             // the page behind showed the occurrence as it was: back to the list it came from
             runCatching { app.calendars.saveOccurrence(e, begin, scope) }.onSuccess { nav.version++; nav.pop(); nav.pop() }.onFailure { error = it.message ?: "error" }
+            return
+        }
+        if (id != 0L && fromCalendar != 0L && e.calendarId != fromCalendar) {
+            // a new event in the other calendar: the page behind showed the old one
+            runCatching { app.calendars.moveToCalendar(e) }.onSuccess { nav.version++; nav.pop(); nav.pop(); nav.push(Screen.Event(it)) }.onFailure { error = it.message ?: "error" }
             return
         }
         runCatching { app.calendars.save(e) }.onSuccess { nav.version++; nav.pop(); if (id == 0L) { nav.push(Screen.Event(it)) } }
@@ -647,7 +655,8 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
                 else Small(stringResource(R.string.ends_another_day), Modifier.padding(horizontal = rowPadH, vertical = 8.dp).noRippleClickable { datePick = "end" })
             }
             val whatPart: @Composable () -> Unit = {
-                TextRow(calendars.firstOrNull { it.id == e.calendarId }?.name ?: "…", secondary = stringResource(R.string.calendar), size = typo.title) { choose = "calendar" }
+                val cal = calendars.firstOrNull { it.id == e.calendarId }
+                TextRow(cal?.name ?: "…", secondary = stringResource(R.string.calendar) + (cal?.account?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""), size = typo.title, onClick = if (calendarFixed) null else ({ choose = "calendar" }))
                 TextRow(reminderLabel(e.reminderMinutes), secondary = stringResource(R.string.reminder), size = typo.title) { choose = "reminder" }
                 TextRow(repeatLabel(e.repeat), secondary = stringResource(R.string.repeat), size = typo.title) { choose = "repeat" }
                 Rule()
@@ -681,7 +690,7 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
             }, onCancel = { datePick = null })
         }
         when (choose) {
-            "calendar" -> TextMenu(stringResource(R.string.calendar), calendars.map { c -> MenuItem(c.name, c.account.takeIf { it.isNotBlank() && it != c.name }) { e = e.copy(calendarId = c.id) } }, onDismiss = { choose = null })
+            "calendar" -> TextMenu(stringResource(R.string.calendar), calendars.map { c -> MenuItem(c.name, c.account.takeIf { it.isNotBlank() }) { e = e.copy(calendarId = c.id) } }, onDismiss = { choose = null })
             "reminder" -> TextMenu(stringResource(R.string.reminder), listOf(null, 0, 10, 30, 60, 120, 1440, 2880).map { m -> MenuItem(reminderLabel(m)) { e = e.copy(reminderMinutes = m) } }, onDismiss = { choose = null })
             "repeat" -> TextMenu(stringResource(R.string.repeat), listOf("", "DAILY", "WEEKLY", "MONTHLY", "YEARLY").map { r -> MenuItem(repeatLabel(r)) { e = e.copy(repeat = r) } }, onDismiss = { choose = null })
         }
