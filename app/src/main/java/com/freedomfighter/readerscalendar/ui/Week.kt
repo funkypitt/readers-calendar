@@ -240,8 +240,9 @@ fun TimeGrid(
             Box(Modifier.width(gutter))
             for (d in shown) Column(Modifier.weight(weightOf(d)).padding(horizontal = 2.dp)) {
                 allDay.filter { it.date <= d && Instant.ofEpochMilli(it.end).atZone(zone).toLocalDate() > d }.forEach { o ->
-                    Box(Modifier.fillMaxWidth().padding(bottom = 2.dp).background(colors.fg).noRippleClickable { onEvent(o) }.padding(horizontal = 4.dp, vertical = 2.dp)) {
-                        T(o.title, size = blockSize, color = colors.bg, maxLines = 1, align = TextAlign.Start, lineHeightMul = 1.2f)
+                    val (fill, ink) = eventColors(o.color)
+                    Box(Modifier.fillMaxWidth().padding(bottom = 2.dp).background(fill).noRippleClickable { onEvent(o) }.padding(horizontal = 4.dp, vertical = 2.dp)) {
+                        T(o.title, size = blockSize, color = ink, maxLines = 1, align = TextAlign.Start, lineHeightMul = 1.2f)
                     }
                 }
             }
@@ -317,16 +318,17 @@ fun TimeGrid(
                                 }
                             }
                         ) else Modifier.noRippleClickable { onEvent(p.o) }
+                        val (fill, ink) = eventColors(p.o.color)
                         Column(
                             Modifier.offset(x = 2.dp + laneW * p.lane + colW * shiftDays, y = top).width(laneW).height(h).padding(end = if (p.lane < p.lanes - 1) 1.dp else 0.dp, bottom = 1.dp)
                                 .then(if (ghost != null) Modifier.zIndex(1f).border(1.dp, colors.bg) else Modifier)
-                                .background(colors.fg).then(gesture).padding(horizontal = 4.dp, vertical = 2.dp).clipToBounds()
+                                .background(fill).then(gesture).padding(horizontal = 4.dp, vertical = 2.dp).clipToBounds()
                         ) {
-                            T(p.o.title, size = blockSize, color = colors.bg, maxLines = if (showTime) lines - 1 else lines, align = TextAlign.Start, lineHeightMul = 1.15f, softWrap = wrap)
+                            T(p.o.title, size = blockSize, color = ink, maxLines = if (showTime) lines - 1 else lines, align = TextAlign.Start, lineHeightMul = 1.15f, softWrap = wrap)
                             if (showTime) T(
                                 if (ghost != null) start.format(f) + " – " + LocalTime.ofSecondOfDay(((newStart + p.endMin - p.startMin) % 1440) * 60L).format(f)
                                 else start.format(f) + (if (single && !p.o.location.isNullOrBlank()) " · " + p.o.location else ""),
-                                size = blockSize, color = colors.bg.copy(alpha = 0.7f), maxLines = 1, align = TextAlign.Start, lineHeightMul = 1.15f, softWrap = false
+                                size = blockSize, color = ink.copy(alpha = 0.7f), maxLines = 1, align = TextAlign.Start, lineHeightMul = 1.15f, softWrap = false
                             )
                         }
                     }

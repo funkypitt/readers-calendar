@@ -42,7 +42,8 @@ object CalendarWidgets {
         return day + " · " + Instant.ofEpochMilli(o.begin).atZone(zone).format(f) + " – " + Instant.ofEpochMilli(o.end).atZone(zone).format(f)
     }
 
-    fun openEvent(id: Long): Intent = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id)).setClassName(PKG, "$PKG.MainActivity")
+    fun openEvent(o: Occurrence): Intent = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, o.eventId)).setClassName(PKG, "$PKG.MainActivity")
+        .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, o.begin)
     fun newEvent(): Intent = Intent(Intent.ACTION_INSERT).setData(CalendarContract.Events.CONTENT_URI).setClassName(PKG, "$PKG.MainActivity")
     fun openApp(): Intent = Intent(Intent.ACTION_MAIN).setClassName(PKG, "$PKG.MainActivity")
 
@@ -59,7 +60,7 @@ object CalendarWidgets {
         } else {
             views.setTextViewText(R.id.widget_title, first.title)
             views.setTextViewText(R.id.widget_sub, whenLabel(context, first))
-            views.setOnClickPendingIntent(R.id.widget_body, WidgetUi.activity(context, openEvent(first.eventId), 1))
+            views.setOnClickPendingIntent(R.id.widget_body, WidgetUi.activity(context, openEvent(first), 1))
         }
         views.setOnClickPendingIntent(R.id.widget_plus, WidgetUi.activity(context, newEvent(), 2))
         mgr.updateAppWidget(id, views)
@@ -141,7 +142,7 @@ class ListService : RemoteViewsService() {
             val (_, fg, dim) = WidgetUi.colors(applicationContext)
             v.setTextViewText(R.id.item_title, o.title); v.setTextColor(R.id.item_title, fg)
             v.setTextViewText(R.id.item_sub, CalendarWidgets.whenLabel(applicationContext, o)); v.setTextColor(R.id.item_sub, dim)
-            v.setOnClickFillInIntent(R.id.item_root, Intent().setData(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, o.eventId)))
+            v.setOnClickFillInIntent(R.id.item_root, Intent().setData(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, o.eventId)).putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, o.begin))
             return v
         }
         override fun getLoadingView(): RemoteViews? = null

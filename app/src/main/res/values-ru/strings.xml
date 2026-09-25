@@ -88,4 +88,7 @@
     <string name="scope_this">только это событие</string>
     <string name="scope_following">это и следующие</string>
     <string name="scope_series">всю серию</string>
+    <string name="setting_events">события: %1$s</string>
+    <string name="events_coloured">цветом своего календаря</string>
+    <string name="events_plain">без цвета</string>
 </resources>

@@ -24,7 +24,9 @@ data class Settings(
     /** Calendar used for new events (0 = first writable). */
     val defaultCalendar: Long = 0L,
     val defaultReminderMinutes: Int = 10,
-    val defaultView: DefaultView = DefaultView.WEEK
+    val defaultView: DefaultView = DefaultView.WEEK,
+    /** Events filled with their calendar's colour instead of black on white. */
+    val colouredEvents: Boolean = false
 )
 
 class Prefs(context: Context) {
@@ -44,7 +46,8 @@ class Prefs(context: Context) {
         hiddenCalendars = (sp.getStringSet("hidden_calendars", emptySet()) ?: emptySet()).mapNotNull { it.toLongOrNull() }.toSet(),
         defaultCalendar = sp.getLong("default_calendar", 0L),
         defaultReminderMinutes = sp.getInt("default_reminder", 10),
-        defaultView = enumOr(sp.getString("default_view", null), DefaultView.WEEK)
+        defaultView = enumOr(sp.getString("default_view", null), DefaultView.WEEK),
+        colouredEvents = sp.getBoolean("coloured_events", false)
     )
     private inline fun <reified E : Enum<E>> enumOr(name: String?, default: E): E =
         name?.let { runCatching { enumValueOf<E>(it) }.getOrNull() } ?: default
@@ -59,6 +62,7 @@ class Prefs(context: Context) {
     fun setDefaultCalendar(id: Long) = sp.edit().putLong("default_calendar", id).apply()
     fun setDefaultReminder(m: Int) = sp.edit().putInt("default_reminder", m).apply()
     fun setDefaultView(v: DefaultView) = sp.edit().putString("default_view", v.name).apply()
+    fun setColouredEvents(v: Boolean) = sp.edit().putBoolean("coloured_events", v).apply()
     fun toggleTheme(systemIsDark: Boolean) {
         val dark = when (_settings.value.theme) { ThemeMode.DARK -> true; ThemeMode.LIGHT -> false; ThemeMode.SYSTEM -> systemIsDark }
         setTheme(if (dark) ThemeMode.LIGHT else ThemeMode.DARK)

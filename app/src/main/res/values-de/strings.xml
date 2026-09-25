@@ -88,4 +88,7 @@
     <string name="scope_this">nur diesen Termin</string>
     <string name="scope_following">diesen und die folgenden</string>
     <string name="scope_series">die ganze Serie</string>
+    <string name="setting_events">Termine: %1$s</string>
+    <string name="events_coloured">in der Farbe ihres Kalenders</string>
+    <string name="events_plain">schlicht</string>
 </resources>

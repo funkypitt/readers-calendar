@@ -26,6 +26,8 @@ import com.freedomfighter.readerscalendar.ui.Nav
 import com.freedomfighter.readerscalendar.ui.ReaderTheme
 import com.freedomfighter.readerscalendar.ui.Screen
 import com.freedomfighter.readerscalendar.ui.SettingsScreen
+import com.freedomfighter.readerscalendar.ui.weekStart
+import com.freedomfighter.readerscalendar.data.DefaultView
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -45,16 +47,7 @@ class MainActivity : ComponentActivity() {
         handle(intent)
         // A cold start lands on the chosen view (the week unless set otherwise); the agenda
         // stays underneath as the root, one back away.
-        if (savedInstanceState == null && nav.stack.size == 1) {
-            val today = LocalDate.now()
-            when (app.prefs.settings.value.defaultView) {
-                com.freedomfighter.readerscalendar.data.DefaultView.WEEK -> nav.push(Screen.Week(com.freedomfighter.readerscalendar.ui.weekStart(today, app.prefs.settings.value.weekStartsMonday)))
-                com.freedomfighter.readerscalendar.data.DefaultView.WORKDAYS -> nav.push(Screen.Week(com.freedomfighter.readerscalendar.ui.weekStart(today, true), workdays = true))
-                com.freedomfighter.readerscalendar.data.DefaultView.DAY -> nav.push(Screen.Day(today))
-                com.freedomfighter.readerscalendar.data.DefaultView.MONTH -> nav.push(Screen.Month(java.time.YearMonth.now()))
-                com.freedomfighter.readerscalendar.data.DefaultView.AGENDA -> {}
-            }
-        }
+        if (savedInstanceState == null && nav.stack.size == 1) pushDefaultView(LocalDate.now())
         setContent {
             val settings by app.prefs.settings.collectAsState()
             ReaderTheme(settings) {
@@ -79,12 +72,30 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() { super.onPause(); com.freedomfighter.readerscalendar.widget.CalendarWidgets.refresh(this) }
 
+    /** The view chosen in the settings (the week unless set otherwise), over the agenda root. */
+    private fun pushDefaultView(date: LocalDate) {
+        val settings = (application as App).prefs.settings.value
+        when (settings.defaultView) {
+            DefaultView.WEEK -> nav.push(Screen.Week(weekStart(date, settings.weekStartsMonday)))
+            DefaultView.WORKDAYS -> nav.push(Screen.Week(weekStart(date, true), workdays = true))
+            DefaultView.DAY -> nav.push(Screen.Day(date))
+            DefaultView.MONTH -> nav.push(Screen.Month(java.time.YearMonth.from(date)))
+            DefaultView.AGENDA -> {}
+        }
+    }
+
     /** content://com.android.calendar/time/<millis> → that day; /events/<id> → the event; INSERT → new event. */
     private fun handle(intent: Intent?) {
         val data = intent?.data
         when {
             intent?.action == Intent.ACTION_INSERT -> { nav.home(); nav.push(Screen.Edit(0L)) }
-            data != null && data.path?.startsWith("/events/") == true -> runCatching { ContentUris.parseId(data) }.getOrNull()?.let { nav.home(); nav.push(Screen.Event(it, intent.getLongExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, 0L))) }
+            // an event opened from a widget or a launcher tile: back leads to the chosen view, on the event's day
+            data != null && data.path?.startsWith("/events/") == true -> runCatching { ContentUris.parseId(data) }.getOrNull()?.let {
+                val begin = intent.getLongExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, 0L)
+                nav.home()
+                pushDefaultView(if (begin > 0L) Instant.ofEpochMilli(begin).atZone(ZoneId.systemDefault()).toLocalDate() else LocalDate.now())
+                nav.push(Screen.Event(it, begin))
+            }
             data != null && data.path?.startsWith("/time") == true -> {
                 val millis = data.lastPathSegment?.toLongOrNull()
                 val date = if (millis != null) Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).toLocalDate() else LocalDate.now()

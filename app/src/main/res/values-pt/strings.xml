@@ -88,4 +88,7 @@
     <string name="scope_this">só este evento</string>
     <string name="scope_following">este e os seguintes</string>
     <string name="scope_series">toda a série</string>
+    <string name="setting_events">eventos: %1$s</string>
+    <string name="events_coloured">na cor da sua agenda</string>
+    <string name="events_plain">sóbrios</string>
 </resources>

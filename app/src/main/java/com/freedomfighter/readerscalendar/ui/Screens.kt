@@ -3,6 +3,8 @@ package com.freedomfighter.readerscalendar.ui
 import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -280,7 +282,10 @@ fun AgendaScreen(nav: Nav, app: App) {
 fun OccurrenceRow(o: Occurrence, allDayText: String, onClick: () -> Unit) {
     val colors = LocalColors.current
     Column(Modifier.fillMaxWidth().noRippleClickable(onClick = onClick).padding(horizontal = rowPadH, vertical = rowPadV * 0.6f)) {
-        T(o.title, maxLines = 1)
+        if (LocalColoured.current && o.color != 0) Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.padding(end = 10.dp).size(10.dp).background(eventColors(o.color).first, CircleShape))
+            T(o.title, maxLines = 1)
+        } else T(o.title, maxLines = 1)
         Small(whenLine(o, allDayText) + (if (!o.location.isNullOrBlank()) " · " + o.location else ""), maxLines = 1, color = colors.dim)
     }
 }
@@ -394,6 +399,7 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
             val cellWPx = with(density) { ((maxWidth - 8.dp) / 7).toPx() }
             val rowHPx = with(density) { rowH.toPx() }
             val ghost = drag ?: settled
+            val coloured = LocalColoured.current
             Column(Modifier.fillMaxSize().padding(horizontal = 4.dp)) {
                 var d = start
                 repeat(weeks) {
@@ -429,7 +435,11 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
                                             if (g != null && released && g.target != g.from && onMove(g.o, ChronoUnit.DAYS.between(g.from, g.target).toInt())) settled = g
                                         }
                                     ) else Modifier
-                                    T(text, Modifier.fillMaxWidth().then(gesture), size = lineSize, color = if (lifted) colors.rule else if (inMonth) colors.fg else colors.dim, align = TextAlign.Start, maxLines = 1, softWrap = false, lineHeightMul = 1.25f)
+                                    if (coloured) {
+                                        // the calendar's colour as a band behind the line, as on the desktop
+                                        val (fill, ink) = eventColors(o.color)
+                                        T(text, Modifier.fillMaxWidth().padding(bottom = 1.dp).background(if (lifted) fill.copy(alpha = 0.45f) else fill).then(gesture).padding(horizontal = 2.dp), size = lineSize, color = ink, align = TextAlign.Start, maxLines = 1, softWrap = false, lineHeightMul = 1.2f)
+                                    } else T(text, Modifier.fillMaxWidth().then(gesture), size = lineSize, color = if (lifted) colors.rule else if (inMonth) colors.fg else colors.dim, align = TextAlign.Start, maxLines = 1, softWrap = false, lineHeightMul = 1.25f)
                                 }
                                 if (list.size > shown) T("+${list.size - shown}", size = lineSize, color = colors.dim, align = TextAlign.Start, maxLines = 1, lineHeightMul = 1.25f)
                             }
@@ -833,6 +843,7 @@ fun SettingsScreen(nav: Nav, app: App) {
                 TextRow(stringResource(R.string.setting_text_size, when (s.textSize) { TextSize.SMALL -> stringResource(R.string.size_small); TextSize.MEDIUM -> stringResource(R.string.size_medium); TextSize.LARGE -> stringResource(R.string.size_large) }), size = typo.title) { app.prefs.setTextSize(next(s.textSize)) }
                 TextRow(stringResource(R.string.setting_align, if (s.align == Align.LEFT) stringResource(R.string.align_left) else stringResource(R.string.align_center)), size = typo.title) { app.prefs.setAlign(next(s.align)) }
                 TextRow(stringResource(R.string.setting_haptics, if (s.haptics) on else off), size = typo.title) { app.prefs.setHaptics(!s.haptics) }
+                TextRow(stringResource(R.string.setting_events, stringResource(if (s.colouredEvents) R.string.events_coloured else R.string.events_plain)), size = typo.title) { app.prefs.setColouredEvents(!s.colouredEvents) }
                 Rule(Modifier.padding(vertical = 8.dp))
                 TextRow(stringResource(R.string.about, com.freedomfighter.readerscalendar.BuildConfig.VERSION_NAME), size = typo.title, secondary = stringResource(R.string.about_line)) { }
                 TextRow(stringResource(R.string.credits), size = typo.title) { }

@@ -24,7 +24,9 @@ data class Occurrence(
     val begin: Long,
     val end: Long,
     val allDay: Boolean,
-    val location: String?
+    val location: String?,
+    /** ARGB of the event as its calendar shows it (the event's own colour, else the calendar's). */
+    val color: Int = 0
 ) {
     /** Local date the occurrence starts on. */
     val date: LocalDate get() = Instant.ofEpochMilli(begin).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -95,7 +97,7 @@ class CalendarStore(private val context: Context) {
         val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
         ContentUris.appendId(builder, from); ContentUris.appendId(builder, to)
         val proj = arrayOf(CalendarContract.Instances.EVENT_ID, CalendarContract.Instances.CALENDAR_ID, CalendarContract.Instances.TITLE,
-            CalendarContract.Instances.BEGIN, CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_LOCATION)
+            CalendarContract.Instances.BEGIN, CalendarContract.Instances.END, CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_LOCATION, CalendarContract.Instances.DISPLAY_COLOR)
         val out = ArrayList<Occurrence>()
         cr.query(builder.build(), proj, "(${CalendarContract.Instances.STATUS} IS NULL OR ${CalendarContract.Instances.STATUS} != ${CalendarContract.Instances.STATUS_CANCELED})", null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
             while (c.moveToNext()) {
@@ -104,7 +106,7 @@ class CalendarStore(private val context: Context) {
                 val allDay = c.getInt(5) == 1
                 var b = c.getLong(3); var e = c.getLong(4)
                 if (allDay) { val off = TimeZone.getDefault().getOffset(b); b -= off; e -= off }
-                out += Occurrence(c.getLong(0), calId, c.getString(2)?.ifBlank { null } ?: "(untitled)", b, e, allDay, c.getString(6))
+                out += Occurrence(c.getLong(0), calId, c.getString(2)?.ifBlank { null } ?: "(untitled)", b, e, allDay, c.getString(6), if (c.isNull(7)) 0 else c.getInt(7))
             }
         }
         return out.sortedWith(compareBy({ it.begin }, { !it.allDay }))

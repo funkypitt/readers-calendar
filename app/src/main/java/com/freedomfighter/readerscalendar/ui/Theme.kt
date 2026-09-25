@@ -4,6 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -41,6 +42,23 @@ data class ReaderTypography(
 val LocalColors = compositionLocalOf { ReaderColors(Color.Black, Color.White) }
 val LocalTypo = compositionLocalOf { ReaderTypography(FontFamily.SansSerif, FontWeight.Light, 28.sp, true) }
 val LocalHaptics = compositionLocalOf { true }
+/** Events in their calendar's colour (a setting); otherwise the page's two colours. */
+val LocalColoured = compositionLocalOf { false }
+
+/**
+ * An event block's fill and its text: the page's foreground and background by default; with the
+ * colour setting, the calendar's colour and black or white text, whichever contrasts more with it
+ * (WCAG relative luminance, the same rule as the desktop app).
+ */
+@Composable
+fun eventColors(argb: Int): Pair<Color, Color> {
+    val colors = LocalColors.current
+    if (!LocalColoured.current || argb == 0) return colors.fg to colors.bg
+    val fill = Color(argb).copy(alpha = 1f)
+    val lum = fill.luminance()
+    val ink = if ((lum + 0.05f) / 0.05f >= 1.05f / (lum + 0.05f)) Color.Black else Color.White
+    return fill to ink
+}
 
 @Composable
 fun ReaderTheme(settings: Settings, content: @Composable () -> Unit) {
@@ -68,6 +86,7 @@ fun ReaderTheme(settings: Settings, content: @Composable () -> Unit) {
         LocalColors provides colors,
         LocalTypo provides typo,
         LocalHaptics provides settings.haptics,
+        LocalColoured provides settings.colouredEvents,
         content = content
     )
 }
