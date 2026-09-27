@@ -3,7 +3,11 @@ package com.freedomfighter.readerscalendar
 import android.Manifest
 import android.content.ContentUris
 import android.content.Intent
+import android.database.ContentObserver
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.provider.CalendarContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -68,9 +72,26 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); setIntent(intent); handle(intent) }
 
-    override fun onResume() { super.onResume(); nav.version++ }
+    /** What the sync apps write while the app is open shows at once: a sync writes many rows, the
+     *  views re-read once it has been quiet for half a second. */
+    private val handler = Handler(Looper.getMainLooper())
+    private val reread = Runnable { nav.version++ }
+    private val observer = object : ContentObserver(handler) {
+        override fun onChange(selfChange: Boolean) { handler.removeCallbacks(reread); handler.postDelayed(reread, 500) }
+    }
 
-    override fun onPause() { super.onPause(); com.freedomfighter.readerscalendar.widget.CalendarWidgets.refresh(this) }
+    override fun onResume() {
+        super.onResume()
+        nav.version++
+        if ((application as App).calendars.hasPermission()) runCatching { contentResolver.registerContentObserver(CalendarContract.CONTENT_URI, true, observer) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        runCatching { contentResolver.unregisterContentObserver(observer) }
+        handler.removeCallbacks(reread)
+        com.freedomfighter.readerscalendar.widget.CalendarWidgets.refresh(this)
+    }
 
     /** The view chosen in the settings (the week unless set otherwise), over the agenda root. */
     private fun pushDefaultView(date: LocalDate) {
