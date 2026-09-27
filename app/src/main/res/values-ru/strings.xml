@@ -73,7 +73,7 @@
     <string name="action_cancel">отмена</string>
     <string name="search">поиск</string>
     <string name="week_view">неделя</string>
-    <string name="agenda">повестка</string>
+    <string name="agenda">расписание</string>
     <string name="setting_default_view">открывается на: %1$s</string>
     <string name="day_view">день</string>
     <string name="workdays_view">будни</string>
@@ -91,4 +91,10 @@
     <string name="setting_events">события: %1$s</string>
     <string name="events_coloured">цветом своего календаря</string>
     <string name="events_plain">без цвета</string>
+    <string name="font_serif">с засечками</string>
+    <string name="font_sans">без засечек</string>
+    <string name="font_mono">моноширинный</string>
+    <string name="untitled">(без названия)</string>
+    <string name="save_failed">не сохранено</string>
+    <string name="save_failed_detail">не сохранено: %1$s</string>
 </resources>

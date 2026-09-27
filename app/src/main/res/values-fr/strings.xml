@@ -91,4 +91,10 @@
     <string name="setting_events">événements : %1$s</string>
     <string name="events_coloured">couleur de leur agenda</string>
     <string name="events_plain">sobres</string>
+    <string name="font_serif">à empattements</string>
+    <string name="font_sans">sans empattements</string>
+    <string name="font_mono">chasse fixe</string>
+    <string name="untitled">(sans titre)</string>
+    <string name="save_failed">non enregistré</string>
+    <string name="save_failed_detail">non enregistré : %1$s</string>
 </resources>

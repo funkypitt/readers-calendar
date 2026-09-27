@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
+import com.freedomfighter.readerscalendar.R
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -106,7 +107,7 @@ class CalendarStore(private val context: Context) {
                 val allDay = c.getInt(5) == 1
                 var b = c.getLong(3); var e = c.getLong(4)
                 if (allDay) { val off = TimeZone.getDefault().getOffset(b); b -= off; e -= off }
-                out += Occurrence(c.getLong(0), calId, c.getString(2)?.ifBlank { null } ?: "(untitled)", b, e, allDay, c.getString(6), if (c.isNull(7)) 0 else c.getInt(7))
+                out += Occurrence(c.getLong(0), calId, c.getString(2)?.ifBlank { null } ?: context.getString(R.string.untitled), b, e, allDay, c.getString(6), if (c.isNull(7)) 0 else c.getInt(7))
             }
         }
         return out.sortedWith(compareBy({ it.begin }, { !it.allDay }))

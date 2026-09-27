@@ -12,7 +12,7 @@
     <string name="month_view">Monat</string>
     <string name="calendars">Kalender</string>
     <string name="calendars_help">Kalender antippen, um ihn zu zeigen oder zu verbergen; gezeigte sind invertiert</string>
-    <string name="read_only">nur lesen</string>
+    <string name="read_only">schreibgeschützt</string>
     <string name="default_calendar">Standard</string>
     <string name="settings">Einstellungen</string>
     <string name="event">Termin</string>
@@ -54,7 +54,7 @@
     <string name="theme_dark">Weiß auf Schwarz</string>
     <string name="theme_light">Schwarz auf Weiß</string>
     <string name="theme_system">wie das System</string>
-    <string name="setting_theme">Thema: %1$s</string>
+    <string name="setting_theme">Design: %1$s</string>
     <string name="setting_font">Schrift: %1$s</string>
     <string name="setting_text_size">Textgröße: %1$s</string>
     <string name="setting_align">Ausrichtung: %1$s</string>
@@ -91,4 +91,10 @@
     <string name="setting_events">Termine: %1$s</string>
     <string name="events_coloured">in der Farbe ihres Kalenders</string>
     <string name="events_plain">schlicht</string>
+    <string name="font_serif">mit Serifen</string>
+    <string name="font_sans">serifenlos</string>
+    <string name="font_mono">Festbreite</string>
+    <string name="untitled">(ohne Titel)</string>
+    <string name="save_failed">nicht gespeichert</string>
+    <string name="save_failed_detail">nicht gespeichert: %1$s</string>
 </resources>

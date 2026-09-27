@@ -194,6 +194,10 @@ fun ViewsMenu(nav: Nav, app: App, onDismiss: () -> Unit, first: List<MenuItem> =
 // Formatting
 // ---------------------------------------------------------------------------------------------
 
+/** A failed save in the reader's language, the system's own words (English, often) after it. */
+fun saveFailed(context: android.content.Context, e: Throwable): String =
+    e.message?.let { context.getString(R.string.save_failed_detail, it) } ?: context.getString(R.string.save_failed)
+
 @Composable
 fun timeFmt(): DateTimeFormatter {
     val ctx = LocalContext.current
@@ -243,7 +247,7 @@ fun AgendaScreen(nav: Nav, app: App) {
     val list: @Composable () -> Unit = {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(
-                title = if (landscape) stringResource(R.string.agenda) else today.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase() + "  ▾",
+                title = if (landscape) stringResource(R.string.agenda) else today.format(DateTimeFormatter.ofPattern("LLLL yyyy")).lowercase() + "  ▾",
                 onBack = null, trailing = "⋯", onTrailing = { menu = true },
                 onTitle = { nav.push(Screen.Month(YearMonth.from(today))) }
             )
@@ -267,7 +271,7 @@ fun AgendaScreen(nav: Nav, app: App) {
     Page {
         if (landscape) TwoPane(left = {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 16.dp)) {
-                Small(today.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase(), Modifier.padding(horizontal = rowPadH, vertical = 6.dp).noRippleClickable { nav.push(Screen.Month(YearMonth.from(today))) })
+                Small(today.format(DateTimeFormatter.ofPattern("LLLL yyyy")).lowercase(), Modifier.padding(horizontal = rowPadH, vertical = 6.dp).noRippleClickable { nav.push(Screen.Month(YearMonth.from(today))) })
                 MonthGrid(YearMonth.from(today), settings.weekStartsMonday, marked, null, onLongDay = { nav.push(Screen.Edit(0L, it)) }) { nav.push(Screen.Day(it)) }
                 Box(Modifier.weight(1f))
                 TextRow(stringResource(R.string.week_view), size = typo.title) { nav.push(Screen.Week(weekStart(today, settings.weekStartsMonday))) }
@@ -469,7 +473,7 @@ fun MonthScreen(nav: Nav, app: App, month: YearMonth) {
     fun go(m: YearMonth) { nav.stack[nav.stack.size - 1] = Screen.Month(m) }
     Page {
         Column(Modifier.fillMaxSize()) {
-            ScreenTitle(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase(), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
+            ScreenTitle(month.format(DateTimeFormatter.ofPattern("LLLL yyyy")).lowercase(), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             Box(Modifier.weight(1f)) {
                 MonthBoard(month, settings.weekStartsMonday, occurrences, onDay = { nav.push(Screen.Day(it)) }, onLongDay = { nav.push(Screen.Edit(0L, it)) }, onSwipe = { go(month.plusMonths(it.toLong())) },
                     onMove = { o, days -> mover.move(o, days, 0) })
@@ -543,7 +547,7 @@ fun EventScreen(nav: Nav, app: App, id: Long, begin: Long = 0L) {
             val dateLine = if (e.start.toLocalDate() == e.end.toLocalDate()) e.start.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy")).lowercase()
             else e.start.format(DateTimeFormatter.ofPattern("d MMM")).lowercase() + " – " + e.end.format(DateTimeFormatter.ofPattern("d MMM yyyy")).lowercase()
             val head: @Composable () -> Unit = {
-                T(e.title.ifBlank { "(untitled)" }, size = typo.big * 0.6f, lineHeightMul = 1.15f)
+                T(e.title.ifBlank { stringResource(R.string.untitled) }, size = typo.big * 0.6f, lineHeightMul = 1.15f)
                 T(dateLine, Modifier.padding(top = 14.dp), size = typo.title)
                 T(if (e.allDay) stringResource(R.string.all_day) else e.start.format(f) + " – " + e.end.format(f), size = typo.title)
                 if (e.repeat.isNotEmpty()) Small(repeatLabel(e.repeat), Modifier.padding(top = 4.dp))
@@ -639,16 +643,16 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
         if (e.allDay && e.end.toLocalDate().isBefore(e.start.toLocalDate())) { error = context.getString(R.string.end_before_start); return }
         if (id != 0L && scope != Scope.SERIES && begin > 0L) {
             // the page behind showed the occurrence as it was: back to the list it came from
-            runCatching { app.calendars.saveOccurrence(e, begin, scope) }.onSuccess { nav.version++; nav.pop(); nav.pop() }.onFailure { error = it.message ?: "error" }
+            runCatching { app.calendars.saveOccurrence(e, begin, scope) }.onSuccess { nav.version++; nav.pop(); nav.pop() }.onFailure { error = saveFailed(context, it) }
             return
         }
         if (id != 0L && fromCalendar != 0L && e.calendarId != fromCalendar) {
             // a new event in the other calendar: the page behind showed the old one
-            runCatching { app.calendars.moveToCalendar(e) }.onSuccess { nav.version++; nav.pop(); nav.pop(); nav.push(Screen.Event(it)) }.onFailure { error = it.message ?: "error" }
+            runCatching { app.calendars.moveToCalendar(e) }.onSuccess { nav.version++; nav.pop(); nav.pop(); nav.push(Screen.Event(it)) }.onFailure { error = saveFailed(context, it) }
             return
         }
         runCatching { app.calendars.save(e) }.onSuccess { nav.version++; nav.pop(); if (id == 0L) { nav.push(Screen.Event(it)) } }
-            .onFailure { error = it.message ?: "error" }
+            .onFailure { error = saveFailed(context, it) }
     }
 
     Page {
@@ -783,7 +787,7 @@ fun DatePickSheet(initial: LocalDate, weekStartsMonday: Boolean, onDone: (LocalD
             Rule(color = colors.fg)
             Row(Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 T("‹", Modifier.noRippleClickable { month = month.minusMonths(1) }, size = typo.title, align = TextAlign.Start)
-                Small(month.format(DateTimeFormatter.ofPattern("MMMM yyyy")).lowercase(), Modifier.weight(1f), align = TextAlign.Center)
+                Small(month.format(DateTimeFormatter.ofPattern("LLLL yyyy")).lowercase(), Modifier.weight(1f), align = TextAlign.Center)
                 T("›", Modifier.noRippleClickable { month = month.plusMonths(1) }, size = typo.title, align = TextAlign.End)
             }
             MonthGrid(month, weekStartsMonday, emptySet(), initial) { onDone(it) }
@@ -839,7 +843,7 @@ fun SettingsScreen(nav: Nav, app: App) {
                 Rule(Modifier.padding(vertical = 8.dp))
                 val themeName = when (s.theme) { ThemeMode.DARK -> stringResource(R.string.theme_dark); ThemeMode.LIGHT -> stringResource(R.string.theme_light); ThemeMode.SYSTEM -> stringResource(R.string.theme_system) }
                 TextRow(stringResource(R.string.setting_theme, themeName), size = typo.title) { app.prefs.setTheme(next(s.theme)) }
-                TextRow(stringResource(R.string.setting_font, when (s.font) { FontChoice.SERIF -> "serif"; FontChoice.SANS -> "sans"; FontChoice.MONO -> "mono" }), size = typo.title) { app.prefs.setFont(next(s.font)) }
+                TextRow(stringResource(R.string.setting_font, when (s.font) { FontChoice.SERIF -> stringResource(R.string.font_serif); FontChoice.SANS -> stringResource(R.string.font_sans); FontChoice.MONO -> stringResource(R.string.font_mono) }), size = typo.title) { app.prefs.setFont(next(s.font)) }
                 TextRow(stringResource(R.string.setting_text_size, when (s.textSize) { TextSize.SMALL -> stringResource(R.string.size_small); TextSize.MEDIUM -> stringResource(R.string.size_medium); TextSize.LARGE -> stringResource(R.string.size_large) }), size = typo.title) { app.prefs.setTextSize(next(s.textSize)) }
                 TextRow(stringResource(R.string.setting_align, if (s.align == Align.LEFT) stringResource(R.string.align_left) else stringResource(R.string.align_center)), size = typo.title) { app.prefs.setAlign(next(s.align)) }
                 TextRow(stringResource(R.string.setting_haptics, if (s.haptics) on else off), size = typo.title) { app.prefs.setHaptics(!s.haptics) }

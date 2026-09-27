@@ -48,7 +48,7 @@
     <string name="repeat_other">repete-se (regra personalizada)</string>
     <string name="setting_default_calendar">os novos eventos vão para: %1$s</string>
     <string name="setting_default_reminder">lembrete predefinido: %1$s</string>
-    <string name="setting_week_start">a semana começa à: %1$s</string>
+    <string name="setting_week_start">primeiro dia da semana: %1$s</string>
     <string name="monday">segunda-feira</string>
     <string name="sunday">domingo</string>
     <string name="theme_dark">branco sobre preto</string>
@@ -89,6 +89,12 @@
     <string name="scope_following">este e os seguintes</string>
     <string name="scope_series">toda a série</string>
     <string name="setting_events">eventos: %1$s</string>
-    <string name="events_coloured">na cor da sua agenda</string>
+    <string name="events_coloured">na cor do seu calendário</string>
     <string name="events_plain">sóbrios</string>
+    <string name="font_serif">com serifa</string>
+    <string name="font_sans">sem serifa</string>
+    <string name="font_mono">monoespaçada</string>
+    <string name="untitled">(sem título)</string>
+    <string name="save_failed">não guardado</string>
+    <string name="save_failed_detail">não guardado: %1$s</string>
 </resources>

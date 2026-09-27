@@ -91,4 +91,10 @@
     <string name="setting_events">eventos: %1$s</string>
     <string name="events_coloured">con el color de su calendario</string>
     <string name="events_plain">sobrios</string>
+    <string name="font_serif">con serifa</string>
+    <string name="font_sans">sin serifa</string>
+    <string name="font_mono">monoespaciada</string>
+    <string name="untitled">(sin título)</string>
+    <string name="save_failed">no se ha guardado</string>
+    <string name="save_failed_detail">no se ha guardado: %1$s</string>
 </resources>
