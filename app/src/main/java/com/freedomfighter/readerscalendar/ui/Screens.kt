@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -575,7 +576,9 @@ fun EventScreen(nav: Nav, app: App, id: Long, begin: Long = 0L) {
                 }
             } }
             Rule()
-            Row(Modifier.fillMaxWidth()) {
+            // an event of a calendar that can only be read: the page says so where the two actions would be
+            if (!e.writable) Small(stringResource(R.string.event_read_only), Modifier.padding(horizontal = rowPadH, vertical = 14.dp), maxLines = 3)
+            else Row(Modifier.fillMaxWidth()) {
                 Box(Modifier.weight(1f)) { TextRow(stringResource(R.string.edit), size = typo.title) { if (occurrence) askEdit = true else nav.push(Screen.Edit(id)) } }
                 Box(Modifier.weight(1f)) { TextRow(stringResource(R.string.delete), size = typo.title) { confirmDelete = true } }
             }
@@ -604,8 +607,8 @@ fun repeatLabel(r: String): String = when (r) {
 @Composable
 fun reminderLabel(m: Int?): String = when (m) {
     null -> stringResource(R.string.reminder_none); 0 -> stringResource(R.string.reminder_at_time)
-    in 1..59 -> stringResource(R.string.reminder_minutes, m); in 60..1439 -> stringResource(R.string.reminder_hours, m / 60)
-    else -> stringResource(R.string.reminder_days, m / 1440)
+    in 1..59 -> pluralStringResource(R.plurals.reminder_minutes, m, m); in 60..1439 -> pluralStringResource(R.plurals.reminder_hours, m / 60, m / 60)
+    else -> pluralStringResource(R.plurals.reminder_days, m / 1440, m / 1440)
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -627,9 +630,12 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
     // one occurrence, or the series from it on: the form opens on THAT day; the whole series, on the day it began
     var fromCalendar by remember { mutableStateOf(0L) }          // the calendar the event is in now
     LaunchedEffect(id) { if (id != 0L) { withContext(Dispatchers.IO) { app.calendars.event(id, if (scope == Scope.SERIES) 0L else begin) }?.let { e = it; fromCalendar = it.calendarId }; loaded = true } }
+    // an event of a read-only calendar has no form: whatever led here, back to where it came from
+    LaunchedEffect(loaded) { if (id != 0L && loaded && !e.writable) nav.pop() }
     // one occurrence alone stays with its series, in the series' calendar
     val calendarFixed = id != 0L && scope == Scope.THIS && begin > 0L
-    LaunchedEffect(calendars) { if (e.calendarId == 0L || calendars.none { it.id == e.calendarId }) calendars.firstOrNull()?.let { e = e.copy(calendarId = it.id) } }
+    // a new event whose calendar is gone or was never chosen goes to the first one; an event that exists stays in its own
+    LaunchedEffect(calendars) { if (id == 0L && (e.calendarId == 0L || calendars.none { it.id == e.calendarId })) calendars.firstOrNull()?.let { e = e.copy(calendarId = it.id) } }
     var prompt by remember { mutableStateOf<String?>(null) }      // "title" | "location" | "description" | "startTime" | "endTime"
     var datePick by remember { mutableStateOf<String?>(null) }    // "start" | "end"
     var choose by remember { mutableStateOf<String?>(null) }      // "calendar" | "reminder" | "repeat"

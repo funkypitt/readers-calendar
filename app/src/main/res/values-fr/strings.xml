@@ -13,6 +13,7 @@
     <string name="calendars">agendas</string>
     <string name="calendars_help">toucher un agenda pour l\'afficher ou le masquer ; les agendas affichés sont inversés</string>
     <string name="read_only">lecture seule</string>
+    <string name="event_read_only">cet agenda est en lecture seule : ses événements ne peuvent pas être modifiés ici</string>
     <string name="default_calendar">par défaut</string>
     <string name="settings">réglages</string>
     <string name="event">événement</string>
@@ -37,9 +38,18 @@
     <string name="description">description</string>
     <string name="reminder_none">pas de rappel</string>
     <string name="reminder_at_time">à l\'heure de l\'événement</string>
-    <string name="reminder_minutes">%1$d minutes avant</string>
-    <string name="reminder_hours">%1$d heures avant</string>
-    <string name="reminder_days">%1$d jours avant</string>
+    <plurals name="reminder_minutes">
+        <item quantity="one">%1$d minute avant</item>
+        <item quantity="other">%1$d minutes avant</item>
+    </plurals>
+    <plurals name="reminder_hours">
+        <item quantity="one">%1$d heure avant</item>
+        <item quantity="other">%1$d heures avant</item>
+    </plurals>
+    <plurals name="reminder_days">
+        <item quantity="one">%1$d jour avant</item>
+        <item quantity="other">%1$d jours avant</item>
+    </plurals>
     <string name="repeat_none">ne se répète pas</string>
     <string name="repeat_daily">chaque jour</string>
     <string name="repeat_weekly">chaque semaine</string>

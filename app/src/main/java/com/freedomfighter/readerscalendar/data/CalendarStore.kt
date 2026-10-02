@@ -17,6 +17,9 @@ import java.util.TimeZone
 
 data class CalendarInfo(val id: Long, val name: String, val account: String, val writable: Boolean)
 
+/** Whether a calendar of this access level takes changes made on the phone: contributor and above. */
+fun takesChanges(accessLevel: Int): Boolean = accessLevel >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR
+
 /** One occurrence of an event, as shown in lists. */
 data class Occurrence(
     val eventId: Long,
@@ -50,7 +53,9 @@ data class EventDetails(
     val repeat: String = "",
     /** The rule as the calendar holds it (days of the week, an end, an interval…): written back
      *  untouched unless [repeat] was changed in the form. */
-    val rrule: String = ""
+    val rrule: String = "",
+    /** False for an event of a calendar that can only be read: nothing of it is changed from here. */
+    val writable: Boolean = true
 )
 
 /** What a change to one occurrence of a series is for. */
@@ -87,7 +92,7 @@ class CalendarStore(private val context: Context) {
         val out = ArrayList<CalendarInfo>()
         val proj = arrayOf(CalendarContract.Calendars._ID, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, CalendarContract.Calendars.ACCOUNT_NAME, CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, CalendarContract.Calendars.ACCOUNT_TYPE)
         cr.query(CalendarContract.Calendars.CONTENT_URI, proj, "${CalendarContract.Calendars.VISIBLE}=1", null, "${CalendarContract.Calendars.ACCOUNT_NAME},${CalendarContract.Calendars.CALENDAR_DISPLAY_NAME}")?.use { c ->
-            while (c.moveToNext()) out += CalendarInfo(c.getLong(0), c.getString(1) ?: "", accountLabel(c.getString(2) ?: "", c.getString(4) ?: ""), c.getInt(3) >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR)
+            while (c.moveToNext()) out += CalendarInfo(c.getLong(0), c.getString(1) ?: "", accountLabel(c.getString(2) ?: "", c.getString(4) ?: ""), takesChanges(c.getInt(3)))
         }
         return out
     }
@@ -128,7 +133,7 @@ class CalendarStore(private val context: Context) {
     private fun master(id: Long): EventDetails? {
         if (!hasPermission()) return null
         val proj = arrayOf(CalendarContract.Events.CALENDAR_ID, CalendarContract.Events.TITLE, CalendarContract.Events.ALL_DAY, CalendarContract.Events.DTSTART,
-            CalendarContract.Events.DTEND, CalendarContract.Events.EVENT_LOCATION, CalendarContract.Events.DESCRIPTION, CalendarContract.Events.RRULE, CalendarContract.Events.DURATION)
+            CalendarContract.Events.DTEND, CalendarContract.Events.EVENT_LOCATION, CalendarContract.Events.DESCRIPTION, CalendarContract.Events.RRULE, CalendarContract.Events.DURATION, CalendarContract.Events.CALENDAR_ACCESS_LEVEL)
         val zone = ZoneId.systemDefault()
         val details = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), proj, null, null, null)?.use { c ->
             if (!c.moveToFirst()) return null
@@ -138,7 +143,7 @@ class CalendarStore(private val context: Context) {
             if (dtend == 0L) dtend = dtstart + parseDuration(c.getString(8))
             val start = if (allDay) Instant.ofEpochMilli(dtstart).atZone(ZoneOffset.UTC).toLocalDateTime() else Instant.ofEpochMilli(dtstart).atZone(zone).toLocalDateTime()
             val end = if (allDay) Instant.ofEpochMilli(dtend).atZone(ZoneOffset.UTC).toLocalDateTime().minusDays(1) else Instant.ofEpochMilli(dtend).atZone(zone).toLocalDateTime()
-            EventDetails(id, c.getLong(0), c.getString(1) ?: "", allDay, start, end, c.getString(5) ?: "", c.getString(6) ?: "", null, repeatOf(c.getString(7)), c.getString(7) ?: "")
+            EventDetails(id, c.getLong(0), c.getString(1) ?: "", allDay, start, end, c.getString(5) ?: "", c.getString(6) ?: "", null, repeatOf(c.getString(7)), c.getString(7) ?: "", takesChanges(c.getInt(9)))
         } ?: return null
         val reminder = cr.query(CalendarContract.Reminders.CONTENT_URI, arrayOf(CalendarContract.Reminders.MINUTES), "${CalendarContract.Reminders.EVENT_ID}=?", arrayOf(id.toString()), null)?.use { c ->
             if (c.moveToFirst()) c.getInt(0) else null
@@ -162,8 +167,17 @@ class CalendarStore(private val context: Context) {
         else -> "OTHER"
     }
 
+    /** Whether the event sits in a calendar that can only be read (a shared one, public holidays…).
+     *  Such an event is never written, moved or deleted from here: every change below asks first. */
+    fun readOnly(id: Long): Boolean = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.CALENDAR_ACCESS_LEVEL), null, null, null)?.use { c ->
+        c.moveToFirst() && !takesChanges(c.getInt(0))
+    } ?: false
+
+    private fun refuseReadOnly(id: Long) { if (id != 0L && readOnly(id)) throw IllegalStateException(context.getString(R.string.read_only)) }
+
     /** Insert or update; returns the event id. A repeating event is written as a whole series. */
     fun save(e: EventDetails, exdate: String? = null): Long {
+        refuseReadOnly(e.id)
         val zone = ZoneId.systemDefault()
         val v = ContentValues().apply {
             put(CalendarContract.Events.CALENDAR_ID, e.calendarId)
@@ -213,6 +227,7 @@ class CalendarStore(private val context: Context) {
      *  skips — and only then deleted from the first, so that a failure leaves one too many, not a
      *  hole. Occurrences changed one by one stay behind with the old series and go with it. */
     fun moveToCalendar(e: EventDetails): Long {
+        refuseReadOnly(e.id)
         val old = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, e.id)
         val exdate = cr.query(old, arrayOf(CalendarContract.Events.EXDATE), null, null, null)?.use { if (it.moveToFirst()) it.getString(0) else null }
         val id = save(e.copy(id = 0L), exdate?.takeIf { it.isNotBlank() && e.repeat.isNotEmpty() })
@@ -270,6 +285,7 @@ class CalendarStore(private val context: Context) {
 
     /** [e] as the form holds it, for the occurrence that began at [begin] — alone, or from it on. Returns the new event. */
     fun saveOccurrence(e: EventDetails, begin: Long, scope: Scope): Long {
+        refuseReadOnly(e.id)
         if (scope == Scope.FOLLOWING) {
             val rest = ruleForTheRest(e, begin)
             val id = save(e.copy(id = 0L, rrule = rest, repeat = repeatOf(rest)))
@@ -301,6 +317,7 @@ class CalendarStore(private val context: Context) {
 
     /** Only the occurrence that began at [begin], or that one and every one after it. */
     fun deleteOccurrence(id: Long, begin: Long, scope: Scope) {
+        if (readOnly(id)) return
         if (scope == Scope.THIS && neverSynced(id)) { skip(id, begin); return }
         if (scope == Scope.THIS) {
             cr.insert(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, id), ContentValues().apply {
@@ -339,7 +356,7 @@ class CalendarStore(private val context: Context) {
     /** Whether [begin] is the very first occurrence: "from this one on" is then the whole series. */
     fun isFirst(id: Long, begin: Long): Boolean = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.DTSTART), null, null, null)?.use { c -> c.moveToFirst() && c.getLong(0) == begin } ?: false
 
-    fun delete(id: Long) { cr.delete(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), null, null) }
+    fun delete(id: Long) { if (readOnly(id)) return; cr.delete(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), null, null) }
 
     /** Whether the event is a series (a rule or dates of its own), so that moving it moves every occurrence. */
     fun repeats(id: Long): Boolean = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.RRULE, CalendarContract.Events.RDATE), null, null, null)?.use { c ->
@@ -352,6 +369,7 @@ class CalendarStore(private val context: Context) {
      * arithmetic, so a day across a time change keeps its hour.
      */
     fun shift(id: Long, days: Int, minutes: Int) {
+        if (readOnly(id)) return
         val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id)
         val row = cr.query(uri, arrayOf(CalendarContract.Events.DTSTART, CalendarContract.Events.DTEND, CalendarContract.Events.ALL_DAY), null, null, null)?.use { c ->
             if (!c.moveToFirst()) return

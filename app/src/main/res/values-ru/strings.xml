@@ -13,6 +13,7 @@
     <string name="calendars">календари</string>
     <string name="calendars_help">нажмите на календарь, чтобы показать или скрыть его; показанные выделены инверсией</string>
     <string name="read_only">только чтение</string>
+    <string name="event_read_only">этот календарь только для чтения: его события здесь нельзя изменить</string>
     <string name="default_calendar">по умолчанию</string>
     <string name="settings">настройки</string>
     <string name="event">событие</string>
@@ -37,9 +38,24 @@
     <string name="description">описание</string>
     <string name="reminder_none">без напоминания</string>
     <string name="reminder_at_time">в момент события</string>
-    <string name="reminder_minutes">за %1$d мин</string>
-    <string name="reminder_hours">за %1$d ч</string>
-    <string name="reminder_days">за %1$d дн</string>
+    <plurals name="reminder_minutes">
+        <item quantity="one">за %1$d минуту</item>
+        <item quantity="few">за %1$d минуты</item>
+        <item quantity="many">за %1$d минут</item>
+        <item quantity="other">за %1$d минуты</item>
+    </plurals>
+    <plurals name="reminder_hours">
+        <item quantity="one">за %1$d час</item>
+        <item quantity="few">за %1$d часа</item>
+        <item quantity="many">за %1$d часов</item>
+        <item quantity="other">за %1$d часа</item>
+    </plurals>
+    <plurals name="reminder_days">
+        <item quantity="one">за %1$d день</item>
+        <item quantity="few">за %1$d дня</item>
+        <item quantity="many">за %1$d дней</item>
+        <item quantity="other">за %1$d дня</item>
+    </plurals>
     <string name="repeat_none">не повторяется</string>
     <string name="repeat_daily">каждый день</string>
     <string name="repeat_weekly">каждую неделю</string>
