@@ -94,12 +94,43 @@ sealed class Screen {
 class Nav {
     val stack = mutableStateListOf<Screen>(Screen.Agenda)
     val current: Screen get() = stack.last()
-    fun push(s: Screen) { stack.add(s) }
-    fun pop() { if (stack.size > 1) stack.removeAt(stack.size - 1) }
-    fun home() { while (stack.size > 1) stack.removeAt(stack.size - 1) }
+    fun push(s: Screen) { reveal = null; stack.add(s) }
+    fun pop() { reveal = null; if (stack.size > 1) stack.removeAt(stack.size - 1) }
+    fun home() { reveal = null; while (stack.size > 1) stack.removeAt(stack.size - 1) }
     /** Refresh counter: bump after a write so lists re-query. */
     var version by mutableIntStateOf(0)
+    /** The event that was just created: the view on screen opens on it rather than on its usual place. */
+    var reveal by mutableStateOf<Reveal?>(null)
+
+    /**
+     * A new event has been saved and its form closed: the view underneath turns to the event,
+     * so that it is seen where it now sits. The week, the day and the month go to its date;
+     * the workdays open in full for a weekend event (the folded strip would only show a dot);
+     * the list, which starts today and runs [AGENDA_DAYS] days, hands a day outside to the day view.
+     */
+    fun show(e: EventDetails, weekStartsMonday: Boolean) {
+        val date = e.start.toLocalDate()
+        val top = stack.size - 1
+        when (val s = current) {
+            is Screen.Week -> {
+                val weekend = date.dayOfWeek == DayOfWeek.SATURDAY || date.dayOfWeek == DayOfWeek.SUNDAY
+                if (s.workdays && weekend) stack[top] = Screen.Week(weekStart(date, true), workdays = false)
+                else if (date < s.start || date > s.start.plusDays(6)) stack[top] = Screen.Week(weekStart(date, if (s.workdays) true else weekStartsMonday), s.workdays)
+            }
+            is Screen.Day -> if (s.date != date) stack[top] = Screen.Day(date)
+            is Screen.Month -> if (s.month != YearMonth.from(date)) stack[top] = Screen.Month(YearMonth.from(date))
+            Screen.Agenda -> { val today = LocalDate.now(); if (date < today || date >= today.plusDays(AGENDA_DAYS.toLong())) stack.add(Screen.Day(date)) }
+            else -> {}
+        }
+        reveal = Reveal(date, if (e.allDay) null else e.start.toLocalTime())
+    }
 }
+
+/** Where a just-created event sits: its day, and its hour unless it takes the whole day. */
+data class Reveal(val date: LocalDate, val time: LocalTime?)
+
+/** The days the list shows at first, from today on. */
+const val AGENDA_DAYS = 60
 
 // ---------------------------------------------------------------------------------------------
 // Moving an event by dragging it in a grid
@@ -229,7 +260,7 @@ fun AgendaScreen(nav: Nav, app: App) {
     val typo = LocalTypo.current
     val colors = LocalColors.current
     val today = LocalDate.now()
-    var days by remember { mutableIntStateOf(60) }
+    var days by remember { mutableIntStateOf(AGENDA_DAYS) }
     var menu by remember { mutableStateOf(false) }
     val permitted = app.calendars.hasPermission()
     val zone = ZoneId.systemDefault()
@@ -240,6 +271,14 @@ fun AgendaScreen(nav: Nav, app: App) {
         }
     }
     val byDay = remember(occurrences) { occurrences.groupBy { it.date }.toSortedMap() }
+    // an event that was just created: the list goes to its day, once it has been read
+    val listState = rememberLazyListState()
+    LaunchedEffect(byDay, nav.reveal) {
+        val date = nav.reveal?.date ?: return@LaunchedEffect
+        if (date !in byDay) return@LaunchedEffect
+        listState.scrollToItem(byDay.headMap(date).values.sumOf { it.size + 1 })
+        nav.reveal = null
+    }
     val systemDark = isSystemInDarkTheme()
     val allDayText = stringResource(R.string.all_day); val t1 = stringResource(R.string.today); val t2 = stringResource(R.string.tomorrow)
 
@@ -253,7 +292,7 @@ fun AgendaScreen(nav: Nav, app: App) {
                 onTitle = { nav.push(Screen.Month(YearMonth.from(today))) }
             )
             if (!permitted) TextRow(stringResource(R.string.permission_needed), size = typo.title) { (context as? com.freedomfighter.readerscalendar.MainActivity)?.askPermission() }
-            LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
+            LazyColumn(Modifier.weight(1f), state = listState, contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
                 if (permitted && byDay.isEmpty()) item { Small(stringResource(R.string.nothing_planned), Modifier.padding(horizontal = rowPadH, vertical = rowPadV)) }
                 for ((date, list) in byDay) {
                     item(key = "d$date") {
@@ -507,7 +546,7 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(dayLabel(date, LocalDate.now(), stringResource(R.string.today), stringResource(R.string.tomorrow)), onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             TimeGrid(
-                listOf(date), list, LocalDate.now(), Modifier.weight(1f), compact = false,
+                listOf(date), list, LocalDate.now(), Modifier.weight(1f), compact = false, reveal = nav.reveal,
                 onEvent = { nav.push(Screen.Event(it.eventId, it.begin)) },
                 onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
                 onSwipe = { go(date.plusDays(it.toLong())) },
@@ -657,7 +696,8 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
             runCatching { app.calendars.moveToCalendar(e) }.onSuccess { nav.version++; nav.pop(); nav.pop(); nav.push(Screen.Event(it)) }.onFailure { error = saveFailed(context, it) }
             return
         }
-        runCatching { app.calendars.save(e) }.onSuccess { nav.version++; nav.pop(); if (id == 0L) { nav.push(Screen.Event(it)) } }
+        // a new event shows in the view it was created from, turned to its day
+        runCatching { app.calendars.save(e) }.onSuccess { nav.version++; nav.pop(); if (id == 0L) nav.show(e, settings.weekStartsMonday) }
             .onFailure { error = saveFailed(context, it) }
     }
 

@@ -101,7 +101,7 @@ fun WeekScreen(nav: Nav, app: App, start: LocalDate, workdays: Boolean = false) 
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(title, onBack = { nav.pop() }, trailing = "⋯", onTrailing = { menu = true })
             TimeGrid(
-                days, occurrences, today, Modifier.weight(1f), compact = !isLandscape(), compactWeekend = workdays,
+                days, occurrences, today, Modifier.weight(1f), compact = !isLandscape(), compactWeekend = workdays, reveal = nav.reveal,
                 onEvent = { nav.push(Screen.Event(it.eventId, it.begin)) },
                 onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
                 onDay = { nav.push(Screen.Day(it)) },
@@ -159,7 +159,7 @@ private fun placeLanes(events: List<Placed>): List<Placed> {
 fun TimeGrid(
     days: List<LocalDate>, occurrences: List<Occurrence>, today: LocalDate, modifier: Modifier, compact: Boolean, compactWeekend: Boolean = false,
     onEvent: (Occurrence) -> Unit, onSlot: (LocalDate, LocalTime) -> Unit, onDay: ((LocalDate) -> Unit)? = null, onSwipe: ((Int) -> Unit)? = null,
-    onWeekend: (() -> Unit)? = null, onMove: ((Occurrence, Int, Int) -> Boolean)? = null
+    onWeekend: (() -> Unit)? = null, onMove: ((Occurrence, Int, Int) -> Boolean)? = null, reveal: Reveal? = null
 ) {
     // "Workdays": Monday to Friday take the width; Saturday and Sunday fold into a narrow strip on
     // the right that only says whether they hold something — tapping it opens the full week.
@@ -183,10 +183,12 @@ fun TimeGrid(
     val allDay = remember(occurrences) { occurrences.filter { it.allDay } }
     val timed = remember(occurrences) { occurrences.filter { !it.allDay } }
     // Open on the first thing of the day (or now, if today is shown), an hour early; 08:00 when there is nothing.
-    LaunchedEffect(days, timed) {
+    // An event that was just created comes first: the grid opens on its hour.
+    val created = reveal?.takeIf { it.date in days }?.time?.hour
+    LaunchedEffect(days, timed, created) {
         val firstEvent = timed.filter { it.date in days }.minOfOrNull { Instant.ofEpochMilli(it.begin).atZone(zone).hour }
         val now = if (today in days) LocalTime.now().hour else null
-        val target = (listOfNotNull(firstEvent, now).minOrNull() ?: 8) - 1
+        val target = (created ?: listOfNotNull(firstEvent, now).minOrNull() ?: 8) - 1
         scroll.scrollTo(with(density) { (hourHeight * target.coerceIn(0, 18)).roundToPx() })
     }
     var dragged by remember { mutableStateOf(0f) }

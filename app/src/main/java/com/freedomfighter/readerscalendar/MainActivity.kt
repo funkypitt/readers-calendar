@@ -109,7 +109,8 @@ class MainActivity : ComponentActivity() {
     private fun handle(intent: Intent?) {
         val data = intent?.data
         when {
-            intent?.action == Intent.ACTION_INSERT -> { nav.home(); nav.push(Screen.Edit(0L)) }
+            // a new event asked from outside: once saved, it shows in the chosen view
+            intent?.action == Intent.ACTION_INSERT -> { nav.home(); pushDefaultView(LocalDate.now()); nav.push(Screen.Edit(0L)) }
             // an event opened from a widget or a launcher tile: back leads to the chosen view, on the event's day
             data != null && data.path?.startsWith("/events/") == true -> runCatching { ContentUris.parseId(data) }.getOrNull()?.let {
                 val begin = intent.getLongExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, 0L)
