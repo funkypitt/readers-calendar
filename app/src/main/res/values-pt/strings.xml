@@ -64,6 +64,14 @@
     <string name="theme_dark">branco sobre preto</string>
     <string name="theme_light">preto sobre branco</string>
     <string name="theme_system">seguir o sistema</string>
+    <string name="theme_lavande">lavanda</string>
+    <string name="theme_sauge">sálvia</string>
+    <string name="theme_nordique">nórdico</string>
+    <string name="theme_terracotta">terracota</string>
+    <string name="theme_coquette">coquete</string>
+    <string name="theme_militante">militante</string>
+    <string name="theme_torride">tórrido</string>
+    <string name="theme_nature">natureza</string>
     <string name="setting_theme">tema: %1$s</string>
     <string name="setting_font">letra: %1$s</string>
     <string name="setting_text_size">tamanho do texto: %1$s</string>

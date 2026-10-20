@@ -70,6 +70,14 @@
     <string name="theme_dark">белым по чёрному</string>
     <string name="theme_light">чёрным по белому</string>
     <string name="theme_system">как в системе</string>
+    <string name="theme_lavande">лаванда</string>
+    <string name="theme_sauge">шалфей</string>
+    <string name="theme_nordique">северный</string>
+    <string name="theme_terracotta">терракота</string>
+    <string name="theme_coquette">кокетка</string>
+    <string name="theme_militante">активистка</string>
+    <string name="theme_torride">знойный</string>
+    <string name="theme_nature">природа</string>
     <string name="setting_theme">тема: %1$s</string>
     <string name="setting_font">шрифт: %1$s</string>
     <string name="setting_text_size">размер текста: %1$s</string>

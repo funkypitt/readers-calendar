@@ -215,12 +215,12 @@ fun TimeGrid(
                 val isToday = d == today
                 val narrow = weightOf(d) < 1f
                 Column(
-                    Modifier.weight(weightOf(d)).padding(horizontal = 2.dp).then(if (isToday) Modifier.background(colors.fg) else Modifier)
+                    Modifier.weight(weightOf(d)).padding(horizontal = 2.dp).then(if (isToday) Modifier.background(colors.accent) else Modifier)
                         .then(if (onDay != null) Modifier.noRippleClickable { onDay(d) } else Modifier).padding(vertical = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Small(d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).lowercase().trimEnd('.').take(if (compact || narrow) 1 else 3), color = if (isToday) colors.bg else colors.dim, align = TextAlign.Center, maxLines = 1)
-                    T(d.dayOfMonth.toString(), size = if (narrow) typo.small else typo.title, color = if (isToday) colors.bg else colors.fg, align = TextAlign.Center, maxLines = 1)
+                    Small(d.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).lowercase().trimEnd('.').take(if (compact || narrow) 1 else 3), color = if (isToday) colors.onAccent.copy(alpha = 0.6f) else colors.dim, align = TextAlign.Center, maxLines = 1)
+                    T(d.dayOfMonth.toString(), size = if (narrow) typo.small else typo.title, color = if (isToday) colors.onAccent else colors.fg, align = TextAlign.Center, maxLines = 1)
                 }
             }
             if (compactWeekend) {

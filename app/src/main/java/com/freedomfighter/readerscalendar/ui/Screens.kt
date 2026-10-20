@@ -53,8 +53,8 @@ import com.freedomfighter.readerscalendar.data.EventDetails
 import com.freedomfighter.readerscalendar.data.Scope
 import com.freedomfighter.readerscalendar.data.FontChoice
 import com.freedomfighter.readerscalendar.data.Occurrence
+import com.freedomfighter.readerscalendar.data.Palettes
 import com.freedomfighter.readerscalendar.data.TextSize
-import com.freedomfighter.readerscalendar.data.ThemeMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
@@ -199,8 +199,6 @@ fun MoveConfirm(m: Mover) {
 @Composable
 fun ViewsMenu(nav: Nav, app: App, onDismiss: () -> Unit, first: List<MenuItem> = emptyList(), newEventDate: LocalDate = LocalDate.now()) {
     val settings by app.prefs.settings.collectAsState()
-    val colors = LocalColors.current
-    val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     val today = LocalDate.now()
     TextMenu(
         title = null,
@@ -215,7 +213,7 @@ fun ViewsMenu(nav: Nav, app: App, onDismiss: () -> Unit, first: List<MenuItem> =
             add(MenuItem(stringResource(R.string.calendars)) { nav.push(Screen.Calendars) })
         },
         footer = listOf(
-            MenuItem(if (colors.isDark) stringResource(R.string.theme_light) else stringResource(R.string.theme_dark)) { app.prefs.toggleTheme(systemDark) },
+            MenuItem(themeName(Palettes.next(settings.theme))) { app.prefs.nextTheme() },
             MenuItem(stringResource(R.string.settings)) { nav.push(Screen.Settings) }
         ),
         onDismiss = onDismiss
@@ -362,13 +360,13 @@ fun MonthGrid(month: YearMonth, weekStartsMonday: Boolean, marked: Set<LocalDate
                     Box(
                         Modifier.weight(1f).aspectRatio(1f).then(if (onLongDay != null) Modifier.pressable(onClick = { onDay(day) }, onLongPress = { onLongDay(day) }) else Modifier.noRippleClickable { onDay(day) })
                             .padding(3.dp)
-                            .then(if (isToday) Modifier.background(colors.fg) else if (day == selected) Modifier.border(1.dp, colors.fg) else Modifier),
+                            .then(if (isToday) Modifier.background(colors.accent) else if (day == selected) Modifier.border(1.dp, colors.fg) else Modifier),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             T(d.dayOfMonth.toString(), size = typo.title, align = TextAlign.Center,
-                                color = if (isToday) colors.bg else if (inMonth) colors.fg else colors.rule)
-                            T(if (day in marked) "•" else " ", size = typo.small * 0.8f, align = TextAlign.Center, color = if (isToday) colors.bg else colors.fg, lineHeightMul = 0.9f)
+                                color = if (isToday) colors.onAccent else if (inMonth) colors.fg else colors.rule)
+                            T(if (day in marked) "•" else " ", size = typo.small * 0.8f, align = TextAlign.Center, color = if (isToday) colors.onAccent else colors.fg, lineHeightMul = 0.9f)
                         }
                     }
                     d = d.plusDays(1)
@@ -460,8 +458,8 @@ fun MonthBoard(month: YearMonth, weekStartsMonday: Boolean, occurrences: List<Oc
                                 Modifier.weight(1f).fillMaxHeight().pressable(onClick = { onDay(day) }, onLongPress = { onLongDay(day) })
                                     .then(if (landing) Modifier.border(1.5.dp, colors.fg) else Modifier.border(0.5.dp, colors.rule)).padding(horizontal = 2.dp, vertical = 1.dp)
                             ) {
-                                Box(Modifier.then(if (isToday) Modifier.background(colors.fg) else Modifier).padding(horizontal = 3.dp)) {
-                                    T(day.dayOfMonth.toString(), size = typo.small, color = if (isToday) colors.bg else if (inMonth) colors.fg else colors.rule, align = TextAlign.Start, maxLines = 1)
+                                Box(Modifier.then(if (isToday) Modifier.background(colors.accent) else Modifier).padding(horizontal = 3.dp)) {
+                                    T(day.dayOfMonth.toString(), size = typo.small, color = if (isToday) colors.onAccent else if (inMonth) colors.fg else colors.rule, align = TextAlign.Start, maxLines = 1)
                                 }
                                 for ((n, o) in list.take(shown).withIndex()) {
                                     val text = if (o.allDay || o.date != day || !withTime) o.title else Instant.ofEpochMilli(o.begin).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm")) + " " + o.title
@@ -887,8 +885,7 @@ fun SettingsScreen(nav: Nav, app: App) {
                     app.prefs.setDefaultView(when (s.defaultView) { DefaultView.AGENDA -> DefaultView.WEEK; DefaultView.WEEK -> DefaultView.WORKDAYS; DefaultView.WORKDAYS -> DefaultView.DAY; DefaultView.DAY -> DefaultView.MONTH; DefaultView.MONTH -> DefaultView.AGENDA })
                 }
                 Rule(Modifier.padding(vertical = 8.dp))
-                val themeName = when (s.theme) { ThemeMode.DARK -> stringResource(R.string.theme_dark); ThemeMode.LIGHT -> stringResource(R.string.theme_light); ThemeMode.SYSTEM -> stringResource(R.string.theme_system) }
-                TextRow(stringResource(R.string.setting_theme, themeName), size = typo.title) { app.prefs.setTheme(next(s.theme)) }
+                TextRow(stringResource(R.string.setting_theme, themeName(s.theme)), size = typo.title) { app.prefs.nextTheme() }
                 TextRow(stringResource(R.string.setting_font, when (s.font) { FontChoice.SERIF -> stringResource(R.string.font_serif); FontChoice.SANS -> stringResource(R.string.font_sans); FontChoice.MONO -> stringResource(R.string.font_mono) }), size = typo.title) { app.prefs.setFont(next(s.font)) }
                 TextRow(stringResource(R.string.setting_text_size, when (s.textSize) { TextSize.SMALL -> stringResource(R.string.size_small); TextSize.MEDIUM -> stringResource(R.string.size_medium); TextSize.LARGE -> stringResource(R.string.size_large) }), size = typo.title) { app.prefs.setTextSize(next(s.textSize)) }
                 TextRow(stringResource(R.string.setting_align, if (s.align == Align.LEFT) stringResource(R.string.align_left) else stringResource(R.string.align_center)), size = typo.title) { app.prefs.setAlign(next(s.align)) }
