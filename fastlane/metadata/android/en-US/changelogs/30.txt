@@ -1,0 +1,1 @@
+With a colour theme, the events of the list, the rows, the menus, the prompts and the date picker become rounded cards; the two inks stay text on the page.

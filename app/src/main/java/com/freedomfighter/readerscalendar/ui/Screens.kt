@@ -3,7 +3,15 @@ package com.freedomfighter.readerscalendar.ui
 import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -320,10 +328,17 @@ fun AgendaScreen(nav: Nav, app: App) {
     }
 }
 
+/** An event of the list: a line of text in the inks; with a palette, a card, the finger showing the press colour. */
 @Composable
 fun OccurrenceRow(o: Occurrence, allDayText: String, onClick: () -> Unit) {
     val colors = LocalColors.current
-    Column(Modifier.fillMaxWidth().noRippleClickable(onClick = onClick).padding(horizontal = rowPadH, vertical = rowPadV * 0.6f)) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    Column(
+        Modifier.fillMaxWidth().tileCard(if (pressed) colors.press else colors.tile)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = tilePadH(), vertical = rowPadV * 0.6f)
+    ) {
         if (LocalColoured.current && o.color != 0) Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.padding(end = 10.dp).size(10.dp).background(eventColors(o.color).first, CircleShape))
             T(o.title, maxLines = 1)
@@ -826,9 +841,16 @@ fun DatePickSheet(initial: LocalDate, weekStartsMonday: Boolean, onDone: (LocalD
     val typo = LocalTypo.current
     var month by remember { mutableStateOf(YearMonth.from(initial)) }
     BackHandler(onBack = onCancel)
+    val tiles = colors.tiles
     Box(Modifier.fillMaxSize().background(colors.bg.copy(alpha = 0.6f)).noRippleClickable(onClick = onCancel)) {
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(colors.bg).noRippleClickable { }.windowInsetsPadding(WindowInsets.navigationBars)) {
-            Rule(color = colors.fg)
+        // with a palette the sheet is a rounded card, as the menus; the grid of days sits on it flat
+        CompositionLocalProvider(LocalInTile provides true) {
+        Column(
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                .then(if (tiles) Modifier.padding(horizontal = tileGap).clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)) else Modifier)
+                .background(if (tiles) colors.tile else colors.bg).noRippleClickable { }.windowInsetsPadding(WindowInsets.navigationBars)
+        ) {
+            if (tiles) Spacer(Modifier.height(10.dp)) else Rule(color = colors.fg)
             Row(Modifier.fillMaxWidth().padding(horizontal = rowPadH, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 T("‹", Modifier.noRippleClickable { month = month.minusMonths(1) }, size = typo.title, align = TextAlign.Start)
                 Small(month.format(DateTimeFormatter.ofPattern("LLLL yyyy")).lowercase(), Modifier.weight(1f), align = TextAlign.Center)
@@ -836,6 +858,7 @@ fun DatePickSheet(initial: LocalDate, weekStartsMonday: Boolean, onDone: (LocalD
             }
             MonthGrid(month, weekStartsMonday, emptySet(), initial) { onDone(it) }
             Box(Modifier.padding(8.dp))
+        }
         }
     }
 }
