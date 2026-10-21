@@ -631,8 +631,8 @@ fun EventScreen(nav: Nav, app: App, id: Long, begin: Long = 0L) {
             // an event of a calendar that can only be read: the page says so where the two actions would be
             if (!e.writable) Small(stringResource(R.string.event_read_only), Modifier.padding(horizontal = rowPadH, vertical = 14.dp), maxLines = 3)
             else Row(Modifier.fillMaxWidth()) {
-                Box(Modifier.weight(1f)) { TextRow(stringResource(R.string.edit), size = typo.title) { if (occurrence) askEdit = true else nav.push(Screen.Edit(id)) } }
-                Box(Modifier.weight(1f)) { TextRow(stringResource(R.string.delete), size = typo.title) { confirmDelete = true } }
+                Box(Modifier.weight(1f)) { Side(end = false) { TextRow(stringResource(R.string.edit), size = typo.title) { if (occurrence) askEdit = true else nav.push(Screen.Edit(id)) } } }
+                Box(Modifier.weight(1f)) { Side(start = false) { TextRow(stringResource(R.string.delete), size = typo.title) { confirmDelete = true } } }
             }
             Box(Modifier.windowInsetsPadding(WindowInsets.navigationBars))
         }
