@@ -1,0 +1,1 @@
+A repeating event moved by dragging takes its deleted dates along: a deleted occurrence no longer comes back.

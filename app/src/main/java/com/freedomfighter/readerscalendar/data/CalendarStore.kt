@@ -398,8 +398,39 @@ class CalendarStore(private val context: Context) {
                 put(CalendarContract.Events.DURATION, if (allDay || endMinutes == minutes) duration ?: "PT60M" else "PT${length.coerceAtLeast(15)}M")
                 putNull(CalendarContract.Events.DTEND)
                 recurrence.forEach { (k, v) -> put(k, v as String) }
+                // the dates left out of the series move with it, or a deleted occurrence would come back
+                (recurrence[CalendarContract.Events.EXDATE] as String?)?.let { put(CalendarContract.Events.EXDATE, shiftedExdates(it, days, if (allDay) 0 else minutes)) }
             }
         }
         cr.update(uri, v, null, null)
     }
 }
+
+/**
+ * An EXDATE value ("20261104T130000Z,…", optionally "Europe/Zurich;…") with every date moved by
+ * whole days and minutes in local wall-clock time, each written back in its own form.
+ */
+fun shiftedExdates(exdate: String, days: Int, minutes: Int): String {
+    if (days == 0 && minutes == 0) return exdate
+    val semi = exdate.indexOf(';')
+    val tzid = if (semi > 0) exdate.substring(0, semi) else null
+    val values = if (semi > 0) exdate.substring(semi + 1) else exdate
+    val local = ZoneId.systemDefault()
+    val own = tzid?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: local
+    val dateF = java.time.format.DateTimeFormatter.BASIC_ISO_DATE
+    val timeF = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss")
+    val shifted = values.split(",").map { v ->
+        val t = v.trim()
+        runCatching {
+            when {
+                t.length == 8 -> java.time.LocalDate.parse(t, dateF).plusDays(days.toLong()).format(dateF)
+                t.endsWith("Z") -> java.time.LocalDateTime.parse(t.dropLast(1), timeF).atZone(ZoneOffset.UTC).withZoneSameInstant(local)
+                    .toLocalDateTime().plusDays(days.toLong()).plusMinutes(minutes.toLong()).atZone(local).withZoneSameInstant(ZoneOffset.UTC).format(timeF) + "Z"
+                else -> java.time.LocalDateTime.parse(t, timeF).atZone(own).withZoneSameInstant(local)
+                    .toLocalDateTime().plusDays(days.toLong()).plusMinutes(minutes.toLong()).atZone(local).withZoneSameInstant(own).toLocalDateTime().format(timeF)
+            }
+        }.getOrDefault(t)
+    }.joinToString(",")
+    return if (tzid != null) "$tzid;$shifted" else shifted
+}
+
