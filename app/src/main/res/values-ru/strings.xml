@@ -23,6 +23,7 @@
     <string name="whole_series">(всю серию)</string>
     <string name="move_confirm">перенести всю серию?</string>
     <string name="move">перенести</string>
+    <string name="resize">изменить длительность</string>
     <string name="save">сохранить</string>
     <string name="title_prompt">название</string>
     <string name="all_day_setting">весь день: %1$s</string>

@@ -151,25 +151,32 @@ const val AGENDA_DAYS = 60
  * refused or cancelled move snaps back on the refresh.
  */
 class Mover(private val app: App, private val nav: Nav, private val scope: CoroutineScope) {
-    class Pending(val id: Long, val begin: Long, val days: Int, val minutes: Int)
+    /** [endMinutes] differs from [minutes] when the block was stretched by its lower edge. */
+    class Pending(val id: Long, val begin: Long, val days: Int, val minutes: Int, val endMinutes: Int = minutes) {
+        val resize get() = days == 0 && minutes == 0
+    }
     var pending by mutableStateOf<Pending?>(null)
         private set
     private var applied = false
 
     /** True when the event will move — now, or once the series is confirmed. */
-    fun move(o: Occurrence, days: Int, minutes: Int): Boolean {
-        if (days == 0 && minutes == 0) return false
-        if (app.calendars.calendars().firstOrNull { it.id == o.calendarId }?.writable != true) return false
-        if (app.calendars.repeats(o.eventId)) { applied = false; pending = Pending(o.eventId, o.begin, days, minutes); return true }
-        apply(o.eventId, days, minutes); return true
-    }
+    fun move(o: Occurrence, days: Int, minutes: Int): Boolean = change(o, Pending(o.eventId, o.begin, days, minutes))
 
-    fun apply(id: Long, days: Int, minutes: Int) { applied = true; runCatching { app.calendars.shift(id, days, minutes) }; nav.version++ }
+    /** The lower edge dragged: the end moves by [minutes], the start stays. */
+    fun resize(o: Occurrence, minutes: Int): Boolean = change(o, Pending(o.eventId, o.begin, 0, 0, minutes))
+
+    private fun change(o: Occurrence, p: Pending): Boolean {
+        if (p.days == 0 && p.minutes == 0 && p.endMinutes == 0) return false
+        if (app.calendars.calendars().firstOrNull { it.id == o.calendarId }?.writable != true) return false
+        if (app.calendars.repeats(o.eventId)) { applied = false; pending = p; return true }
+        applied = true; runCatching { app.calendars.shift(p.id, p.days, p.minutes, p.endMinutes) }; nav.version++
+        return true
+    }
 
     /** One occurrence of a series, or the series from it on. */
     fun apply(p: Pending, scope: Scope) {
         applied = true
-        runCatching { if (scope == Scope.SERIES) app.calendars.shift(p.id, p.days, p.minutes) else app.calendars.shiftOccurrence(p.id, p.begin, p.days, p.minutes, scope) }
+        runCatching { if (scope == Scope.SERIES) app.calendars.shift(p.id, p.days, p.minutes, p.endMinutes) else app.calendars.shiftOccurrence(p.id, p.begin, p.days, p.minutes, scope, p.endMinutes) }
         nav.version++
     }
 
@@ -197,7 +204,7 @@ fun scopeItems(first: Boolean, onChoice: (Scope) -> Unit): List<MenuItem> = buil
 @Composable
 fun MoveConfirm(m: Mover) {
     val p = m.pending ?: return
-    TextMenu(title = stringResource(R.string.move), items = scopeItems(m.isFirst(p)) { m.apply(p, it) }, onDismiss = { m.dismiss() })
+    TextMenu(title = stringResource(if (p.resize) R.string.resize else R.string.move), items = scopeItems(m.isFirst(p)) { m.apply(p, it) }, onDismiss = { m.dismiss() })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -563,7 +570,8 @@ fun DayScreen(nav: Nav, app: App, date: LocalDate) {
                 onEvent = { nav.push(Screen.Event(it.eventId, it.begin)) },
                 onSlot = { d, t -> nav.push(Screen.Edit(0L, d, t)) },
                 onSwipe = { go(date.plusDays(it.toLong())) },
-                onMove = mover::move
+                onMove = mover::move,
+                onResize = mover::resize
             )
             Rule()
             TextRow(stringResource(R.string.new_event), size = typo.title) { nav.push(Screen.Edit(0L, date)) }

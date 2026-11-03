@@ -1,0 +1,1 @@
+In the week and day views, an event's lower edge can be held and dragged to make it longer or shorter, by quarter hours; a repeating event asks whether to change only this one, those after it or the whole series.

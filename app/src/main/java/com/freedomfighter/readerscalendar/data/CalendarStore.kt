@@ -308,11 +308,15 @@ class CalendarStore(private val context: Context) {
         return id
     }
 
-    /** The occurrence that began at [begin] moved by whole days and minutes — alone, or with those after it. */
-    fun shiftOccurrence(id: Long, begin: Long, days: Int, minutes: Int, scope: Scope) {
+    /** The occurrence that began at [begin] moved by whole days and minutes — alone, or with those after it.
+     *  [endMinutes] moves the end alone (a block stretched by its lower edge); by default it follows the start. */
+    fun shiftOccurrence(id: Long, begin: Long, days: Int, minutes: Int, scope: Scope, endMinutes: Int = minutes) {
         val e = event(id, begin) ?: return
         val m = if (e.allDay) 0L else minutes.toLong()
-        saveOccurrence(e.copy(start = e.start.plusDays(days.toLong()).plusMinutes(m), end = e.end.plusDays(days.toLong()).plusMinutes(m)), begin, scope)
+        val me = if (e.allDay) 0L else endMinutes.toLong()
+        val start = e.start.plusDays(days.toLong()).plusMinutes(m)
+        val end = maxOf(e.end.plusDays(days.toLong()).plusMinutes(me), start.plusMinutes(if (e.allDay) 0L else 15L))
+        saveOccurrence(e.copy(start = start, end = end), begin, scope)
     }
 
     /** Only the occurrence that began at [begin], or that one and every one after it. */
@@ -366,21 +370,35 @@ class CalendarStore(private val context: Context) {
     /**
      * Moves an event by whole days and minutes — a drag in a grid — touching nothing else: the
      * rule, the reminders, the description and the duration stay as they are. Wall-clock
-     * arithmetic, so a day across a time change keeps its hour.
+     * arithmetic, so a day across a time change keeps its hour. [endMinutes] moves the end
+     * apart from the start: a block stretched or shortened by its lower edge.
      */
-    fun shift(id: Long, days: Int, minutes: Int) {
+    fun shift(id: Long, days: Int, minutes: Int, endMinutes: Int = minutes) {
         if (readOnly(id)) return
         val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id)
-        val row = cr.query(uri, arrayOf(CalendarContract.Events.DTSTART, CalendarContract.Events.DTEND, CalendarContract.Events.ALL_DAY), null, null, null)?.use { c ->
+        val row = cr.query(uri, arrayOf(CalendarContract.Events.DTSTART, CalendarContract.Events.DTEND, CalendarContract.Events.ALL_DAY, CalendarContract.Events.DURATION,
+            CalendarContract.Events.RRULE, CalendarContract.Events.RDATE, CalendarContract.Events.EXRULE, CalendarContract.Events.EXDATE), null, null, null)?.use { c ->
             if (!c.moveToFirst()) return
-            Triple(c.getLong(0), if (c.isNull(1)) null else c.getLong(1), c.getInt(2) == 1)
+            listOf(c.getLong(0), if (c.isNull(1)) null else c.getLong(1), c.getInt(2) == 1, c.getString(3), c.getString(4), c.getString(5), c.getString(6), c.getString(7))
         } ?: return
-        val (dtstart, dtend, allDay) = row
+        val dtstart = row[0] as Long; val dtend = row[1] as Long?; val allDay = row[2] as Boolean; val duration = row[3] as String?
+        val recurrence = mapOf(CalendarContract.Events.RRULE to row[4], CalendarContract.Events.RDATE to row[5], CalendarContract.Events.EXRULE to row[6], CalendarContract.Events.EXDATE to row[7])
+            .filterValues { !(it as String?).isNullOrBlank() }
         val zone = if (allDay) ZoneOffset.UTC else ZoneId.systemDefault()
-        fun moved(ms: Long) = Instant.ofEpochMilli(ms).atZone(zone).toLocalDateTime().plusDays(days.toLong()).plusMinutes(if (allDay) 0L else minutes.toLong()).atZone(zone).toInstant().toEpochMilli()
+        fun moved(ms: Long, m: Int) = Instant.ofEpochMilli(ms).atZone(zone).toLocalDateTime().plusDays(days.toLong()).plusMinutes(if (allDay) 0L else m.toLong()).atZone(zone).toInstant().toEpochMilli()
+        val start = moved(dtstart, minutes)
         val v = ContentValues().apply {
-            put(CalendarContract.Events.DTSTART, moved(dtstart))
-            if (dtend != null) put(CalendarContract.Events.DTEND, moved(dtend))
+            put(CalendarContract.Events.DTSTART, start)
+            if (dtend != null && dtend > 0L) put(CalendarContract.Events.DTEND, maxOf(moved(dtend, endMinutes), start + 15 * 60_000L))
+            else {
+                // A series holds its length as DURATION: the lower edge changes the length, not an end.
+                // The provider expands the series again from what the update carries: given DURATION
+                // without the rule, it makes one occurrence of no length — so the rule goes with it.
+                val length = parseDuration(duration) / 60_000L + endMinutes - minutes
+                put(CalendarContract.Events.DURATION, if (allDay || endMinutes == minutes) duration ?: "PT60M" else "PT${length.coerceAtLeast(15)}M")
+                putNull(CalendarContract.Events.DTEND)
+                recurrence.forEach { (k, v) -> put(k, v as String) }
+            }
         }
         cr.update(uri, v, null, null)
     }
