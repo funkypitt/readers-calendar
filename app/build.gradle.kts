@@ -7,14 +7,14 @@ plugins {
 
 android {
     namespace = "com.freedomfighter.readerscalendar"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.freedomfighter.readerscalendar"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 33
-        versionName = "1.19.1"
+        targetSdk = 36
+        versionCode = 34
+        versionName = "1.20.0"
     }
 
     buildTypes { release { isMinifyEnabled = false } }

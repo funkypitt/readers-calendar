@@ -1,0 +1,1 @@
+Compatible with Android 16: transparent system bars. Nothing else changes.
