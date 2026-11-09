@@ -885,7 +885,7 @@ fun CalendarsScreen(nav: Nav, app: App) {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(stringResource(R.string.calendars), onBack = { nav.pop() })
             Small(stringResource(R.string.calendars_help), Modifier.padding(horizontal = rowPadH, vertical = 10.dp), maxLines = 3)
-            LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+            LazyColumn(contentPadding = PaddingValues(bottom = listBottom())) {
                 items(calendars, key = { it.id }) { c ->
                     val shown = c.id !in settings.hiddenCalendars
                     TextRow(c.name, inverted = shown, secondary = c.account + (if (!c.writable) " · " + stringResource(R.string.read_only) else "") + (if (c.id == settings.defaultCalendar) " · " + stringResource(R.string.default_calendar) else ""), size = typo.title) {
@@ -908,7 +908,7 @@ fun SettingsScreen(nav: Nav, app: App) {
     Page {
         Column(Modifier.fillMaxSize()) {
             ScreenTitle(stringResource(R.string.settings), onBack = { nav.pop() })
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = listBottom())) {
                 TextRow(stringResource(R.string.setting_default_calendar, calendars.firstOrNull { it.id == s.defaultCalendar }?.name ?: calendars.firstOrNull()?.name ?: "…"), size = typo.title) { pick = "calendar" }
                 TextRow(stringResource(R.string.setting_default_reminder, reminderLabel(s.defaultReminderMinutes.takeIf { it >= 0 })), size = typo.title) { pick = "reminder" }
                 TextRow(stringResource(R.string.setting_week_start, if (s.weekStartsMonday) stringResource(R.string.monday) else stringResource(R.string.sunday)), size = typo.title) { app.prefs.setWeekStartsMonday(!s.weekStartsMonday) }

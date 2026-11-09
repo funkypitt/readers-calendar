@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -245,6 +246,10 @@ fun ScreenTitle(title: String, onBack: (() -> Unit)?, trailing: String? = null, 
 fun Page(content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(LocalColors.current.bg)) { content() }
 }
+
+/** Bottom padding of a list or page that ends at the screen's edge: its breathing space plus the navigation bar, which the content is drawn behind. */
+@Composable
+fun listBottom(extra: Dp = 24.dp): Dp = extra + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
 // ---------------------------------------------------------------------------------------------
 // Menus and prompts: text-only bottom sheets.
