@@ -1,0 +1,1 @@
+L'agenda d'un événement se choisit parmi les agendas affichés ; les agendas masqués viennent sous « afficher plus d'agendas ».
