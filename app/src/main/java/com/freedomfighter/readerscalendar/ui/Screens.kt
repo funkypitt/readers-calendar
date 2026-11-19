@@ -57,6 +57,8 @@ import com.freedomfighter.readerscalendar.R
 import com.freedomfighter.readerscalendar.data.Align
 import com.freedomfighter.readerscalendar.data.DefaultView
 import com.freedomfighter.readerscalendar.data.CalendarInfo
+import com.freedomfighter.readerscalendar.data.calendarsListedFirst
+import com.freedomfighter.readerscalendar.data.forAnEvent
 import com.freedomfighter.readerscalendar.data.EventDetails
 import com.freedomfighter.readerscalendar.data.Scope
 import com.freedomfighter.readerscalendar.data.FontChoice
@@ -683,7 +685,8 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
     val colors = LocalColors.current
     val f = timeFmt()
     BackHandler { nav.pop() }
-    val calendars by produceState<List<CalendarInfo>>(emptyList()) { value = withContext(Dispatchers.IO) { app.calendars.calendars().filter { it.writable } } }
+    // the calendars shown in the views come first: an event nearly always goes to one of them
+    val calendars by produceState<List<CalendarInfo>>(emptyList(), settings.hiddenCalendars) { value = withContext(Dispatchers.IO) { app.calendars.calendars().forAnEvent(settings.hiddenCalendars) } }
     var loaded by remember { mutableStateOf(id == 0L) }
     val nextHour = time ?: LocalTime.now().plusHours(1).withMinute(0).withSecond(0).withNano(0)
     var e by remember { mutableStateOf(EventDetails(calendarId = settings.defaultCalendar, start = LocalDateTime.of(date, nextHour), end = LocalDateTime.of(date, nextHour).plusHours(1), reminderMinutes = settings.defaultReminderMinutes.takeIf { it >= 0 })) }
@@ -771,7 +774,7 @@ fun EditScreen(nav: Nav, app: App, id: Long, date: LocalDate, time: LocalTime? =
             }, onCancel = { datePick = null })
         }
         when (choose) {
-            "calendar" -> TextMenu(stringResource(R.string.calendar), calendars.map { c -> MenuItem(c.name, c.account.takeIf { it.isNotBlank() }) { e = e.copy(calendarId = c.id) } }, onDismiss = { choose = null })
+            "calendar", "calendarAll" -> CalendarMenu(calendars, settings.hiddenCalendars, e.calendarId, all = choose == "calendarAll", onMore = { choose = "calendarAll" }, onPick = { e = e.copy(calendarId = it) }, onDismiss = { choose = null })
             "reminder" -> TextMenu(stringResource(R.string.reminder), listOf(null, 0, 10, 30, 60, 120, 1440, 2880).map { m -> MenuItem(reminderLabel(m)) { e = e.copy(reminderMinutes = m) } }, onDismiss = { choose = null })
             "repeat" -> TextMenu(stringResource(R.string.repeat), listOf("", "DAILY", "WEEKLY", "MONTHLY", "YEARLY").map { r -> MenuItem(repeatLabel(r)) { e = e.copy(repeat = r) } }, onDismiss = { choose = null })
         }
@@ -897,12 +900,29 @@ fun CalendarsScreen(nav: Nav, app: App) {
     }
 }
 
+/**
+ * The calendar of an event: the calendars shown in the views (and the one in use) — an event nearly
+ * always goes to one of them —, the hidden ones after "show more calendars". [calendars] has the shown first.
+ */
+@Composable
+private fun CalendarMenu(calendars: List<CalendarInfo>, hidden: Set<Long>, current: Long, all: Boolean, onMore: () -> Unit, onPick: (Long) -> Unit, onDismiss: () -> Unit) {
+    val some = calendarsListedFirst(calendars, hidden, current)
+    val short = !all && some.size < calendars.size
+    TextMenu(
+        stringResource(R.string.calendar),
+        (if (short) some else calendars).map { c -> MenuItem(c.name, c.account.takeIf { it.isNotBlank() }) { onPick(c.id) } },
+        onDismiss = onDismiss,
+        // a menu line closes the menu, then acts: this one opens it again, whole
+        footer = if (short) listOf(MenuItem(stringResource(R.string.more_calendars), action = onMore)) else emptyList(),
+    )
+}
+
 @Composable
 fun SettingsScreen(nav: Nav, app: App) {
     val s by app.prefs.settings.collectAsState()
     val typo = LocalTypo.current
     BackHandler { nav.pop() }
-    val calendars by produceState<List<CalendarInfo>>(emptyList()) { value = withContext(Dispatchers.IO) { app.calendars.calendars().filter { it.writable } } }
+    val calendars by produceState<List<CalendarInfo>>(emptyList(), s.hiddenCalendars) { value = withContext(Dispatchers.IO) { app.calendars.calendars().forAnEvent(s.hiddenCalendars) } }
     var pick by remember { mutableStateOf<String?>(null) }
     val on = stringResource(R.string.on); val off = stringResource(R.string.off)
     Page {
@@ -928,7 +948,7 @@ fun SettingsScreen(nav: Nav, app: App) {
             }
         }
         when (pick) {
-            "calendar" -> TextMenu(stringResource(R.string.calendar), calendars.map { c -> MenuItem(c.name, c.account) { app.prefs.setDefaultCalendar(c.id) } }, onDismiss = { pick = null })
+            "calendar", "calendarAll" -> CalendarMenu(calendars, s.hiddenCalendars, s.defaultCalendar, all = pick == "calendarAll", onMore = { pick = "calendarAll" }, onPick = { app.prefs.setDefaultCalendar(it) }, onDismiss = { pick = null })
             "reminder" -> TextMenu(stringResource(R.string.reminder), listOf(null, 0, 10, 30, 60, 120, 1440).map { m -> MenuItem(reminderLabel(m)) { app.prefs.setDefaultReminder(m ?: -1) } }, onDismiss = { pick = null })
         }
     }

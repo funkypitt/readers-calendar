@@ -33,6 +33,7 @@
     <string name="end_time">время окончания</string>
     <string name="end_before_start">конец раньше начала</string>
     <string name="calendar">календарь</string>
+    <string name="more_calendars">показать другие календари</string>
     <string name="reminder">напоминание</string>
     <string name="repeat">повтор</string>
     <string name="location">место</string>

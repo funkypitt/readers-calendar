@@ -33,6 +33,7 @@
     <string name="end_time">hora de fim</string>
     <string name="end_before_start">o fim é anterior ao início</string>
     <string name="calendar">calendário</string>
+    <string name="more_calendars">mostrar mais calendários</string>
     <string name="reminder">lembrete</string>
     <string name="repeat">repetição</string>
     <string name="location">local</string>

@@ -17,6 +17,19 @@ import java.util.TimeZone
 
 data class CalendarInfo(val id: Long, val name: String, val account: String, val writable: Boolean)
 
+/**
+ * The calendars an event can go to, as its form offers them: those shown in the views first — an
+ * event nearly always goes to one of them —, then the hidden ones, each group in its order.
+ */
+fun List<CalendarInfo>.forAnEvent(hidden: Set<Long>): List<CalendarInfo> = filter { it.writable }.sortedBy { it.id in hidden }
+
+/**
+ * Of [calendars] (see [forAnEvent]), the ones listed before "show more calendars": the shown ones
+ * and the one in use. All of them when none is shown.
+ */
+fun calendarsListedFirst(calendars: List<CalendarInfo>, hidden: Set<Long>, current: Long): List<CalendarInfo> =
+    calendars.filter { it.id !in hidden || it.id == current }.ifEmpty { calendars }
+
 /** Whether a calendar of this access level takes changes made on the phone: contributor and above. */
 fun takesChanges(accessLevel: Int): Boolean = accessLevel >= CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR
 

@@ -1,0 +1,1 @@
+A new event's calendar is picked among the calendars shown in the views; the hidden ones come under “show more calendars”.
