@@ -1,0 +1,1 @@
+An event's page has “next”, top right: one tap reads the event that follows, in the calendars shown. Fixed: a whole-day occurrence of a repeating event was shown, changed and deleted one day early.

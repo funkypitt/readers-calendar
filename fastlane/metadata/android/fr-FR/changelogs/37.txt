@@ -1,0 +1,1 @@
+La page d'un événement a « suivant », en haut à droite : un toucher affiche l'événement qui suit, parmi les agendas affichés. Corrigé : une occurrence « toute la journée » d'un événement répété s'affichait, se modifiait et se supprimait un jour trop tôt.

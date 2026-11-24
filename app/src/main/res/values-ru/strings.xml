@@ -17,6 +17,7 @@
     <string name="default_calendar">по умолчанию</string>
     <string name="settings">настройки</string>
     <string name="event">событие</string>
+    <string name="next_event">следующее</string>
     <string name="edit">изменить</string>
     <string name="delete">удалить</string>
     <string name="delete_confirm">удалить это событие?</string>

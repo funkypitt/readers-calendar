@@ -13,8 +13,8 @@ android {
         applicationId = "com.freedomfighter.readerscalendar"
         minSdk = 26
         targetSdk = 36
-        versionCode = 36
-        versionName = "1.21.0"
+        versionCode = 37
+        versionName = "1.22.0"
     }
 
     buildTypes { release { isMinifyEnabled = false } }

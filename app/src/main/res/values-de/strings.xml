@@ -17,6 +17,7 @@
     <string name="default_calendar">Standard</string>
     <string name="settings">Einstellungen</string>
     <string name="event">Termin</string>
+    <string name="next_event">nächster</string>
     <string name="edit">bearbeiten</string>
     <string name="delete">löschen</string>
     <string name="delete_confirm">diesen Termin löschen?</string>

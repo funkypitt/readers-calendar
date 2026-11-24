@@ -17,6 +17,7 @@
     <string name="default_calendar">predefinido</string>
     <string name="settings">definições</string>
     <string name="event">evento</string>
+    <string name="next_event">seguinte</string>
     <string name="edit">editar</string>
     <string name="delete">apagar</string>
     <string name="delete_confirm">apagar este evento?</string>

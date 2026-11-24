@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -61,7 +62,7 @@ class MainActivity : ComponentActivity() {
                     is Screen.Month -> MonthScreen(nav, app, s.month)
                     is Screen.Week -> com.freedomfighter.readerscalendar.ui.WeekScreen(nav, app, s.start, s.workdays)
                     is Screen.Day -> DayScreen(nav, app, s.date)
-                    is Screen.Event -> EventScreen(nav, app, s.id, s.begin)
+                    is Screen.Event -> key(s.id, s.begin) { EventScreen(nav, app, s.id, s.begin) }
                     is Screen.Edit -> EditScreen(nav, app, s.id, s.date, s.time, s.begin, s.scope)
                     Screen.Calendars -> CalendarsScreen(nav, app)
                     Screen.Settings -> SettingsScreen(nav, app)

@@ -50,6 +50,23 @@ data class Occurrence(
     val key: String get() = "$eventId-$begin"
 }
 
+/**
+ * The order events are read in: by start, a whole-day event before the timed ones of its day,
+ * and always the same way round for two that start together.
+ */
+val readingOrder: Comparator<Occurrence> = compareBy({ it.begin }, { !it.allDay }, { it.eventId })
+
+/**
+ * The occurrence read after the one of [eventId] that begins at [start]. When the list does not
+ * hold it — its calendar is not shown —, [start] and [allDay] still say where it stands among
+ * the others.
+ */
+fun List<Occurrence>.after(eventId: Long, start: Long, allDay: Boolean): Occurrence? {
+    val sorted = sortedWith(readingOrder)
+    val here = sorted.firstOrNull { it.eventId == eventId && it.begin == start } ?: Occurrence(eventId, 0L, "", start, start, allDay, null)
+    return sorted.firstOrNull { readingOrder.compare(it, here) > 0 }
+}
+
 /** Everything editable about an event. */
 data class EventDetails(
     val id: Long = 0L,
@@ -132,12 +149,35 @@ class CalendarStore(private val context: Context) {
     }
 
     /**
+     * The event that comes after [e] — the occurrence on screen — among the calendars shown.
+     * Looked for in the month that follows, then in the year: beyond that the page offers nothing.
+     */
+    fun next(e: EventDetails, hidden: Set<Long>): Occurrence? {
+        // where the lists put it: its own hour, local midnight for a whole day
+        val start = (if (e.allDay) e.start.toLocalDate().atStartOfDay() else e.start).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        for (days in longArrayOf(31L, 366L)) occurrences(start, start + days * 86400_000L, hidden).after(e.id, start, e.allDay)?.let { return it }
+        return null
+    }
+
+    /**
+     * The start of an occurrence as the provider keeps it. The lists hand a whole day at local
+     * midnight ([occurrences]); the provider has it at midnight UTC, and that is the instant an
+     * exception, an UNTIL or an EXDATE must name — east of Greenwich the other one is the day before.
+     */
+    private fun stored(id: Long, begin: Long): Long {
+        if (begin <= 0L || begin % 86400_000L == 0L) return begin
+        val allDay = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.ALL_DAY), null, null, null)?.use { c -> c.moveToFirst() && c.getInt(0) == 1 } ?: false
+        return if (allDay) Instant.ofEpochMilli(begin).atZone(ZoneId.systemDefault()).toLocalDate().atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli() else begin
+    }
+
+    /**
      * [begin]: the start of the occurrence that was tapped. A series then answers with THAT
      * occurrence's day and hours, not with the day the series began.
      */
     fun event(id: Long, begin: Long = 0L): EventDetails? {
         val e = master(id) ?: return null
         if (begin <= 0L || e.repeat.isEmpty()) return e
+        @Suppress("NAME_SHADOWING") val begin = stored(id, begin)
         val zone: ZoneId = if (e.allDay) ZoneOffset.UTC else ZoneId.systemDefault()
         val start = Instant.ofEpochMilli(begin).atZone(zone).toLocalDateTime()
         return e.copy(start = start, end = start.plus(java.time.Duration.between(e.start, e.end)))
@@ -299,6 +339,7 @@ class CalendarStore(private val context: Context) {
     /** [e] as the form holds it, for the occurrence that began at [begin] — alone, or from it on. Returns the new event. */
     fun saveOccurrence(e: EventDetails, begin: Long, scope: Scope): Long {
         refuseReadOnly(e.id)
+        @Suppress("NAME_SHADOWING") val begin = stored(e.id, begin)
         if (scope == Scope.FOLLOWING) {
             val rest = ruleForTheRest(e, begin)
             val id = save(e.copy(id = 0L, rrule = rest, repeat = repeatOf(rest)))
@@ -335,6 +376,7 @@ class CalendarStore(private val context: Context) {
     /** Only the occurrence that began at [begin], or that one and every one after it. */
     fun deleteOccurrence(id: Long, begin: Long, scope: Scope) {
         if (readOnly(id)) return
+        @Suppress("NAME_SHADOWING") val begin = stored(id, begin)
         if (scope == Scope.THIS && neverSynced(id)) { skip(id, begin); return }
         if (scope == Scope.THIS) {
             cr.insert(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_EXCEPTION_URI, id), ContentValues().apply {
@@ -371,7 +413,7 @@ class CalendarStore(private val context: Context) {
     }
 
     /** Whether [begin] is the very first occurrence: "from this one on" is then the whole series. */
-    fun isFirst(id: Long, begin: Long): Boolean = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.DTSTART), null, null, null)?.use { c -> c.moveToFirst() && c.getLong(0) == begin } ?: false
+    fun isFirst(id: Long, begin: Long): Boolean = cr.query(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), arrayOf(CalendarContract.Events.DTSTART), null, null, null)?.use { c -> c.moveToFirst() && c.getLong(0) == stored(id, begin) } ?: false
 
     fun delete(id: Long) { if (readOnly(id)) return; cr.delete(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id), null, null) }
 

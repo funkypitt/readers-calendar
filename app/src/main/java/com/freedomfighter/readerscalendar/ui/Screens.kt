@@ -105,6 +105,8 @@ class Nav {
     val stack = mutableStateListOf<Screen>(Screen.Agenda)
     val current: Screen get() = stack.last()
     fun push(s: Screen) { reveal = null; stack.add(s) }
+    /** Another page in place of the one on screen: back still leads where that one came from. */
+    fun replace(s: Screen) { reveal = null; stack[stack.size - 1] = s }
     fun pop() { reveal = null; if (stack.size > 1) stack.removeAt(stack.size - 1) }
     fun home() { reveal = null; while (stack.size > 1) stack.removeAt(stack.size - 1) }
     /** Refresh counter: bump after a write so lists re-query. */
@@ -593,7 +595,10 @@ fun EventScreen(nav: Nav, app: App, id: Long, begin: Long = 0L) {
     val typo = LocalTypo.current
     val colors = LocalColors.current
     BackHandler { nav.pop() }
-    val event by produceState<EventDetails?>(null, id, nav.version) { value = withContext(Dispatchers.IO) { app.calendars.event(id, begin) } }
+    val event by produceState<EventDetails?>(null, id, begin, nav.version) { value = withContext(Dispatchers.IO) { app.calendars.event(id, begin) } }
+    // the event that follows this one in the calendars shown: one tap on "next" reads on
+    val hidden = app.prefs.settings.collectAsState().value.hiddenCalendars
+    val next by produceState<Occurrence?>(null, event, hidden) { value = event?.let { e -> withContext(Dispatchers.IO) { app.calendars.next(e, hidden) } } }
     val calendars by produceState<List<CalendarInfo>>(emptyList()) { value = withContext(Dispatchers.IO) { app.calendars.calendars() } }
     var confirmDelete by remember { mutableStateOf(false) }
     var askEdit by remember { mutableStateOf(false) }
@@ -603,7 +608,8 @@ fun EventScreen(nav: Nav, app: App, id: Long, begin: Long = 0L) {
     val f = timeFmt()
     Page {
         Column(Modifier.fillMaxSize()) {
-            ScreenTitle(stringResource(R.string.event), onBack = { nav.pop() })
+            ScreenTitle(stringResource(R.string.event), onBack = { nav.pop() }, trailing = next?.let { stringResource(R.string.next_event) },
+                onTrailing = { next?.let { nav.replace(Screen.Event(it.eventId, it.begin)) } })
             val e = event
             if (e == null) { Small("…", Modifier.padding(rowPadH)); return@Column }
             val cal = calendars.firstOrNull { it.id == e.calendarId }
